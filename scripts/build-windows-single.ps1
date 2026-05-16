@@ -14,12 +14,12 @@ $env:CGO_ENABLED = "0"
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
 
-go build -ldflags="-H windowsgui" -o bin\static-host-runner-windows-amd64.exe ./cmd/static-runner
-Copy-Item -LiteralPath bin\static-host-runner-windows-amd64.exe -Destination internal\runnerstub\static-host-runner-windows-amd64.exe -Force
-go build -tags embedrunner -ldflags="-H windowsgui" -o release\static-host.exe ./cmd/static-host
+go build -ldflags="-H windowsgui" -o bin\webshare-runner-windows-amd64.exe ./cmd/webshare-runner
+Copy-Item -LiteralPath bin\webshare-runner-windows-amd64.exe -Destination internal\runnerstub\webshare-runner-windows-amd64.exe -Force
+go build -tags embedrunner -ldflags="-H windowsgui" -o release\webshare.exe ./cmd/webshare
 
 Remove-Item Env:CGO_ENABLED -ErrorAction SilentlyContinue
 Remove-Item Env:GOOS -ErrorAction SilentlyContinue
 Remove-Item Env:GOARCH -ErrorAction SilentlyContinue
 
-Write-Host "已生成 release\static-host.exe"
+Write-Host "已生成 release\webshare.exe"

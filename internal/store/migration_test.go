@@ -11,7 +11,7 @@ import (
 // TestMigrateAddsProjectActiveDefault 验证旧库项目迁移后默认保持激活。
 func TestMigrateAddsProjectActiveDefault(t *testing.T) {
 	dataDir := t.TempDir()
-	dbPath := filepath.Join(dataDir, "static-host.db")
+	dbPath := filepath.Join(dataDir, "webshare.db")
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath))
 	if err != nil {
 		t.Fatal(err)

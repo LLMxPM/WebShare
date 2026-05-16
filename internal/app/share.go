@@ -1,4 +1,4 @@
-// 文件功能描述：实现分享网关和项目独立端口下的静态文件访问、分享令牌校验和 SPA fallback。
+// 文件功能描述：实现分享网关和项目独立端口下的静态文件访问、分享密钥校验和 SPA fallback。
 package app
 
 import (
@@ -9,11 +9,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
-	"static-host/internal/model"
-	"static-host/internal/security"
-	"static-host/internal/storage"
+	"webshare/internal/model"
+	"webshare/internal/storage"
 )
 
 // shareHandler 构建分享网关路由，支持 /p/{slug}/ 和自定义挂载路径。
@@ -95,7 +93,7 @@ func (a *App) serveProject(project model.Project, requestPath string, w http.Res
 		http.Error(w, "项目已停用", http.StatusForbidden)
 		return
 	}
-	if !a.allowSharedAccess(project, w, r) {
+	if !a.allowSharedAccess(project, requestPath, w, r) {
 		return
 	}
 	version, err := a.store.CurrentVersion(project)
@@ -139,7 +137,7 @@ func (a *App) serveProject(project model.Project, requestPath string, w http.Res
 }
 
 // allowSharedAccess 根据 public、share、unshared 状态判断外部访问权限。
-func (a *App) allowSharedAccess(project model.Project, w http.ResponseWriter, r *http.Request) bool {
+func (a *App) allowSharedAccess(project model.Project, requestPath string, w http.ResponseWriter, r *http.Request) bool {
 	switch project.ShareState {
 	case model.SharePublic:
 		return true
@@ -147,25 +145,24 @@ func (a *App) allowSharedAccess(project model.Project, w http.ResponseWriter, r 
 		http.Error(w, "项目未分享", http.StatusForbidden)
 		return false
 	case model.ShareToken:
-		token := r.URL.Query().Get("token")
 		cookieName := "share_" + strconvFormat(project.ID)
-		if token == "" {
-			if cookie, err := r.Cookie(cookieName); err == nil {
-				token = cookie.Value
+		if key := normalizeShareKey(r.URL.Query().Get("key")); key != "" {
+			if a.validShareKey(project, key) {
+				setShareKeyCookie(w, cookieName, key)
+				return true
 			}
+			a.rejectShareKey(project, requestPath, w, r, "密钥无效", http.StatusForbidden)
+			return false
 		}
-		if token != "" && security.ConstantTokenEqual(security.TokenHash(token), project.ShareTokenHash) {
-			http.SetCookie(w, &http.Cookie{
-				Name:     cookieName,
-				Value:    token,
-				Path:     "/",
-				Expires:  time.Now().Add(24 * time.Hour),
-				HttpOnly: true,
-				SameSite: http.SameSiteLaxMode,
-			})
+		if cookie, err := r.Cookie(cookieName); err == nil && a.validShareKey(project, cookie.Value) {
+			setShareKeyCookie(w, cookieName, cookie.Value)
 			return true
 		}
-		http.Error(w, "分享令牌无效", http.StatusForbidden)
+		if r.Method == http.MethodPost {
+			a.handleShareKeySubmit(project, cookieName, w, r)
+			return false
+		}
+		a.rejectShareKey(project, requestPath, w, r, "", http.StatusOK)
 		return false
 	default:
 		http.Error(w, "分享状态无效", http.StatusForbidden)

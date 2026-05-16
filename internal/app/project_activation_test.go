@@ -7,10 +7,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"static-host/internal/config"
-	"static-host/internal/model"
+	"webshare/internal/config"
+	"webshare/internal/model"
 )
 
 // TestInactiveMountCanDuplicateButActivationConflicts 验证停用项目可保存重复挂载路径，但激活时会被拦截。
@@ -108,6 +109,46 @@ func TestDeactivatingPortProjectStopsServer(t *testing.T) {
 	}
 	if app.projectServerRunning(project.ID) {
 		t.Fatal("expected project server to stop")
+	}
+}
+
+// TestStartupPortConflictDeactivatesProject 验证重启恢复项目端口失败时自动停用项目并暴露前端提示。
+func TestStartupPortConflictDeactivatesProject(t *testing.T) {
+	app := newActivationTestApp(t)
+	defer app.store.Close()
+
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	occupiedPort := listener.Addr().(*net.TCPAddr).Port
+
+	project := createActivationTestProject(t, app, "occupied-port")
+	project.AccessMode = model.AccessPort
+	project.Port = occupiedPort
+	project.Active = true
+	project, err = app.store.UpdateProjectSettings(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := app.startExistingProjectServers(); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := app.store.ProjectByID(project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.Active {
+		t.Fatal("expected project to be deactivated after occupied port startup failure")
+	}
+	dto := app.projectDTO(latest, httptest.NewRequest(http.MethodGet, "/api/projects/1", nil))
+	if len(dto.Warnings) == 0 {
+		t.Fatal("expected runtime warning to be exposed")
+	}
+	if !strings.Contains(dto.Warnings[0], "已自动停用") {
+		t.Fatalf("unexpected warning: %#v", dto.Warnings)
 	}
 }
 

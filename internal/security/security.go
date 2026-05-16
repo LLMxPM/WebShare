@@ -23,6 +23,7 @@ const (
 	passwordUppercase  = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 	passwordDigits     = "23456789"
 	passwordSymbols    = "!@#$%&*?"
+	shareKeyAlphabet   = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 )
 
 // HashPassword 使用 PBKDF2-HMAC-SHA256 生成可存储的密码摘要。
@@ -68,6 +69,23 @@ func RandomToken(bytesLen int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+// RandomShareKey 生成固定长度的分享密钥，只使用便于输入的字母和数字。
+func RandomShareKey(length int) (string, error) {
+	if length <= 0 {
+		return "", errors.New("分享密钥长度必须大于 0")
+	}
+	var b strings.Builder
+	b.Grow(length)
+	for i := 0; i < length; i++ {
+		char, err := randomChar(shareKeyAlphabet)
+		if err != nil {
+			return "", err
+		}
+		b.WriteByte(char)
+	}
+	return b.String(), nil
 }
 
 // RandomDigits 生成指定长度的数字随机密码，允许首位为 0 以保持固定长度。
@@ -152,7 +170,7 @@ func shuffleBytes(items []byte) error {
 	return nil
 }
 
-// TokenHash 将令牌转换为固定长度摘要，避免明文存储会话和分享令牌。
+// TokenHash 将令牌转换为固定长度摘要，避免明文存储会话和分享密钥。
 func TokenHash(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

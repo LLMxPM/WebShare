@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"static-host/internal/model"
+	"webshare/internal/model"
 )
 
 var (

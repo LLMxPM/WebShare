@@ -1,9 +1,10 @@
-module static-host
+module webshare
 
 go 1.25.0
 
 require (
 	github.com/getlantern/systray v1.2.2
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	modernc.org/sqlite v1.50.1
 )
 

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"static-host/internal/exebundle"
+	"webshare/internal/exebundle"
 )
 
 // startServer 监听随机本地端口并启动静态文件服务。

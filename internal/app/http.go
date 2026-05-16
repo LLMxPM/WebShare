@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"static-host/internal/model"
-	"static-host/internal/security"
-	"static-host/web"
+	"webshare/internal/model"
+	"webshare/internal/security"
+	"webshare/web"
 )
 
 type contextKey string
@@ -150,6 +150,8 @@ func (a *App) handleAPI(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case path == "/me":
 		a.handleMe(w, r)
+	case path == "/me/password":
+		a.changeOwnPassword(w, r)
 	case path == "/users" || strings.HasPrefix(path, "/users/"):
 		a.handleUsers(w, r, strings.TrimPrefix(path, "/users"))
 	case path == "/system" || strings.HasPrefix(path, "/system/"):
@@ -159,15 +161,6 @@ func (a *App) handleAPI(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeError(w, http.StatusNotFound, "接口不存在")
 	}
-}
-
-// handleMe 返回当前登录用户。
-func (a *App) handleMe(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeError(w, http.StatusMethodNotAllowed, "方法不允许")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"user": currentUser(r)})
 }
 
 // readJSON 解析 JSON 请求体。
@@ -253,7 +246,7 @@ func (a *App) projectDTO(project model.Project, r *http.Request) model.ProjectDT
 		dto.AccessURL = fmt.Sprintf("%s://%s/", a.cfg.PublicScheme, a.publicHostWithPort(strconv.Itoa(project.Port)))
 	}
 	if project.ShareState == model.ShareToken {
-		dto.ShareURL = dto.AccessURL + "?token=<重新生成后显示>"
+		dto.ShareURL = dto.AccessURL + "?key=<重新生成后显示>"
 	}
 	if version, err := a.store.CurrentVersion(project); err == nil {
 		dto.Warnings = version.Warnings
@@ -261,5 +254,6 @@ func (a *App) projectDTO(project model.Project, r *http.Request) model.ProjectDT
 			dto.Warnings = []string{}
 		}
 	}
+	dto.Warnings = append(dto.Warnings, a.projectRuntimeWarnings(project.ID)...)
 	return dto
 }

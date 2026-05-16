@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"static-host/internal/model"
+	"webshare/internal/model"
 )
 
 var slugRe = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]{1,62}[a-zA-Z0-9]$`)

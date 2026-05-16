@@ -1,20 +1,24 @@
-// 文件功能描述：实现 ZIP、单 HTML 发布和文件管理版本化写入。
+// 文件功能描述：实现 ZIP、文件夹、单 HTML 发布和文件管理版本化写入。
 package app
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
-	"static-host/internal/analyzer"
-	"static-host/internal/model"
-	"static-host/internal/storage"
+	"webshare/internal/analyzer"
+	"webshare/internal/model"
+	"webshare/internal/storage"
 )
 
-// handlePublish 处理 ZIP 和单 HTML 发布入口。
+// handlePublish 处理 ZIP、文件夹和单 HTML 发布入口。
 func (a *App) handlePublish(w http.ResponseWriter, r *http.Request, project model.Project, parts []string) {
 	if r.Method != http.MethodPost || len(parts) != 1 {
 		writeError(w, http.StatusNotFound, "接口不存在")
@@ -25,6 +29,8 @@ func (a *App) handlePublish(w http.ResponseWriter, r *http.Request, project mode
 		a.publishZIP(w, r, project)
 	case "html":
 		a.publishHTML(w, r, project)
+	case "folder":
+		a.publishFolder(w, r, project)
 	default:
 		writeError(w, http.StatusNotFound, "接口不存在")
 	}
@@ -65,6 +71,26 @@ func (a *App) publishHTML(w http.ResponseWriter, r *http.Request, project model.
 	project.EntryFile = "index.html"
 	project, version, err := a.createPublishedVersion(project, currentUser(r).ID, "html", func(dest string) error {
 		return storage.WriteHTML(file, dest)
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"project": a.projectDTO(project, r), "version": version})
+}
+
+// publishFolder 上传文件夹中的多文件构建产物并创建新版本。
+func (a *App) publishFolder(w http.ResponseWriter, r *http.Request, project model.Project) {
+	manifest, files, cleanup, err := readFolderUpload(r, a.cfg.MaxUploadBytes)
+	if cleanup != nil {
+		defer cleanup()
+	}
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	project, version, err := a.createPublishedVersion(project, currentUser(r).ID, "folder", func(dest string) error {
+		return writeFolderUpload(dest, manifest, files)
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -231,4 +257,145 @@ func readUploadFile(r *http.Request, limit int64) (multipart.File, *multipart.Fi
 	}
 	file, header, err := r.FormFile("file")
 	return file, header, err
+}
+
+// folderUploadManifest 描述文件夹上传中的文件字段和项目内相对路径。
+type folderUploadManifest struct {
+	Files []folderUploadFile `json:"files"`
+}
+
+// folderUploadFile 表示文件夹上传中的单个文件。
+type folderUploadFile struct {
+	Field string `json:"field"`
+	Path  string `json:"path"`
+	Size  int64  `json:"size"`
+}
+
+// readFolderUpload 解析文件夹上传请求，校验 manifest、文件字段和安全路径。
+func readFolderUpload(r *http.Request, limit int64) (folderUploadManifest, map[string][]*multipart.FileHeader, func(), error) {
+	r.Body = http.MaxBytesReader(nil, r.Body, limit)
+	if err := r.ParseMultipartForm(limit); err != nil {
+		return folderUploadManifest{}, nil, nil, err
+	}
+	cleanup := func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}
+	if r.MultipartForm == nil {
+		return folderUploadManifest{}, nil, cleanup, errors.New("上传内容为空")
+	}
+	values := r.MultipartForm.Value["manifest"]
+	if len(values) == 0 || strings.TrimSpace(values[0]) == "" {
+		return folderUploadManifest{}, nil, cleanup, errors.New("文件夹清单不能为空")
+	}
+	var manifest folderUploadManifest
+	if err := json.Unmarshal([]byte(values[0]), &manifest); err != nil {
+		return folderUploadManifest{}, nil, cleanup, errors.New("文件夹清单格式错误")
+	}
+	if len(manifest.Files) == 0 {
+		return folderUploadManifest{}, nil, cleanup, errors.New("文件夹内没有可上传文件")
+	}
+	if err := normalizeFolderManifest(&manifest, r.MultipartForm.File); err != nil {
+		return folderUploadManifest{}, nil, cleanup, err
+	}
+	return manifest, r.MultipartForm.File, cleanup, nil
+}
+
+// normalizeFolderManifest 清理路径、去掉单层根目录并验证文件字段完整性。
+func normalizeFolderManifest(manifest *folderUploadManifest, formFiles map[string][]*multipart.FileHeader) error {
+	for i := range manifest.Files {
+		manifest.Files[i].Field = strings.TrimSpace(manifest.Files[i].Field)
+		if manifest.Files[i].Field == "" {
+			return errors.New("文件字段不能为空")
+		}
+		if manifest.Files[i].Size < 0 {
+			return errors.New("文件大小无效")
+		}
+		rawPath := strings.TrimSpace(strings.ReplaceAll(manifest.Files[i].Path, "\\", "/"))
+		if rawPath == "" || strings.HasPrefix(rawPath, "/") || filepath.IsAbs(rawPath) || strings.Contains(strings.Split(rawPath, "/")[0], ":") {
+			return errors.New("非法项目路径")
+		}
+		cleaned, err := storage.CleanProjectPath(manifest.Files[i].Path)
+		if err != nil {
+			return err
+		}
+		if cleaned == "" {
+			return errors.New("文件路径不能为空")
+		}
+		manifest.Files[i].Path = cleaned
+	}
+	stripFolderManifestRoot(manifest)
+	seen := make(map[string]bool, len(manifest.Files))
+	for _, item := range manifest.Files {
+		if seen[item.Path] {
+			return fmt.Errorf("文件路径重复: %s", item.Path)
+		}
+		seen[item.Path] = true
+		headers := formFiles[item.Field]
+		if len(headers) != 1 {
+			return fmt.Errorf("缺少上传文件: %s", item.Path)
+		}
+		if headers[0].Size != item.Size {
+			return fmt.Errorf("文件大小不匹配: %s", item.Path)
+		}
+	}
+	return nil
+}
+
+// stripFolderManifestRoot 在需要时去掉浏览器文件夹选择带来的单层根目录。
+func stripFolderManifestRoot(manifest *folderUploadManifest) {
+	if folderManifestHasPath(manifest, "index.html") {
+		return
+	}
+	root := ""
+	for _, item := range manifest.Files {
+		head, _, ok := strings.Cut(item.Path, "/")
+		if !ok {
+			return
+		}
+		if root == "" {
+			root = head
+			continue
+		}
+		if root != head {
+			return
+		}
+	}
+	if root == "" || !folderManifestHasPath(manifest, root+"/index.html") {
+		return
+	}
+	prefix := root + "/"
+	for i := range manifest.Files {
+		manifest.Files[i].Path = strings.TrimPrefix(manifest.Files[i].Path, prefix)
+	}
+}
+
+// folderManifestHasPath 判断清单中是否存在指定路径。
+func folderManifestHasPath(manifest *folderUploadManifest, path string) bool {
+	for _, item := range manifest.Files {
+		if item.Path == path {
+			return true
+		}
+	}
+	return false
+}
+
+// writeFolderUpload 按 manifest 将多个文件写入同一个版本目录。
+func writeFolderUpload(dest string, manifest folderUploadManifest, formFiles map[string][]*multipart.FileHeader) error {
+	for _, item := range manifest.Files {
+		src, err := formFiles[item.Field][0].Open()
+		if err != nil {
+			return err
+		}
+		err = storage.WriteFile(dest, item.Path, src)
+		closeErr := src.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	return nil
 }

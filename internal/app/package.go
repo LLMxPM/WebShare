@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"static-host/internal/exebundle"
-	"static-host/internal/model"
+	"webshare/internal/exebundle"
+	"webshare/internal/model"
 )
 
 // handlePackages 分发项目打包下载相关 API。
@@ -75,7 +75,7 @@ func (a *App) buildProjectEXE(project model.Project, version model.ProjectVersio
 		return "", err
 	}
 
-	tmp, err := os.CreateTemp("", "static-host-package-*.exe")
+	tmp, err := os.CreateTemp("", "webshare-package-*.exe")
 	if err != nil {
 		return "", err
 	}

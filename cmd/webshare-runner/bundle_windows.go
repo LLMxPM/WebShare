@@ -87,7 +87,7 @@ func extractZipFile(file *zip.File, target string, mode os.FileMode) error {
 
 // createTempDir 创建壳程序解压静态资源使用的临时目录。
 func createTempDir() (string, error) {
-	base := filepath.Join(os.TempDir(), "static-host-runner")
+	base := filepath.Join(os.TempDir(), "webshare-runner")
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		return "", err
 	}

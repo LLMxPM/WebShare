@@ -13,7 +13,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"static-host/internal/model"
+	"webshare/internal/model"
 )
 
 // Store 持有数据库连接，并提供面向业务的持久化方法。
@@ -26,7 +26,7 @@ func Open(dataDir string) (*Store, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, err
 	}
-	dbPath := filepath.Join(dataDir, "static-host.db")
+	dbPath := filepath.Join(dataDir, "webshare.db")
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath)+"?_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
@@ -270,6 +270,12 @@ func (s *Store) DeleteSession(tokenHash string) error {
 // DeleteSessionsForUser 删除指定用户的全部会话，通常用于重置密码后强制重新登录。
 func (s *Store) DeleteSessionsForUser(userID int64) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ?`, userID)
+	return err
+}
+
+// DeleteOtherSessionsForUser 删除指定用户除当前令牌外的其他会话。
+func (s *Store) DeleteOtherSessionsForUser(userID int64, keepTokenHash string) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ? AND token_hash <> ?`, userID, keepTokenHash)
 	return err
 }
 

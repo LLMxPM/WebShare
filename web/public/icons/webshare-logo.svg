@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="640" viewBox="0 192 1536 640" role="img" aria-labelledby="title desc">
+  <title id="title">WebShare</title>
+  <desc id="desc">清理后的 WebShare 标识，使用几何图形和可编辑文字重绘，去除光栅描摹噪点。</desc>
+  <defs>
+    <linearGradient id="folderGradient" x1="159" y1="516" x2="423" y2="692" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#179DFF"/>
+      <stop offset="1" stop-color="#075BE8"/>
+    </linearGradient>
+    <linearGradient id="shareGradient" x1="397" y1="511" x2="503" y2="617" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1CDFBE"/>
+      <stop offset="1" stop-color="#12BFAE"/>
+    </linearGradient>
+    <mask id="shareGapMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1536" height="1024">
+      <rect width="1536" height="1024" fill="#ffffff"/>
+      <circle cx="450" cy="564" r="70" fill="#000000"/>
+    </mask>
+    <style>
+      .window-stroke {
+        fill: none;
+        stroke: #0c6ef5;
+        stroke-width: 18;
+        stroke-linecap: square;
+      }
+
+      .code-mark {
+        fill: none;
+        stroke: #0c6ef5;
+        stroke-width: 18;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .upload-mark {
+        fill: none;
+        stroke: #ffffff;
+        stroke-width: 18;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .share-mark {
+        fill: none;
+        stroke: #ffffff;
+        stroke-width: 10;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+    </style>
+  </defs>
+
+  <g id="webshare-icon" shape-rendering="geometricPrecision">
+    <g mask="url(#shareGapMask)">
+      <path fill="#0c6ef5" d="M115 387H132V616C132 630.4 143.6 642 158 642H164V659H156C133.4 659 115 640.6 115 618Z"/>
+      <path fill="#0c6ef5" d="M453 387H470V624H453Z"/>
+      <path fill="#12273e" d="M115 371C115 342.8 137.8 320 166 320H419C447.2 320 470 342.8 470 371V387H115Z"/>
+
+      <circle cx="162" cy="354" r="14" fill="#17d5b8"/>
+      <circle cx="199" cy="354" r="14" fill="#0b70f3"/>
+      <circle cx="236" cy="354" r="14" fill="#ccd4dc"/>
+
+      <path class="code-mark" d="M240 426L197 462L240 498"/>
+      <path class="code-mark" d="M318 417L289 507"/>
+      <path class="code-mark" d="M348 426L391 462L348 498"/>
+
+      <path fill="url(#folderGradient)" d="M180 516H236C246 516 254 522 258 531L268 551C272 558 279 562 287 562H410C417.2 562 423 567.8 423 575V668C423 681.3 412.3 692 399 692H183C169.7 692 159 681.3 159 668V537C159 525.4 168.4 516 180 516Z"/>
+      <path fill="#063fbf" opacity=".16" d="M357 612H423V668C423 681.3 412.3 692 399 692H309Z"/>
+      <path class="upload-mark" d="M270 656V585M229 624L270 583L311 624"/>
+    </g>
+
+    <circle cx="450" cy="564" r="61" fill="url(#shareGradient)"/>
+    <path class="share-mark" d="M424 563L475 536M424 563L475 591"/>
+    <circle cx="424" cy="563" r="13" fill="#ffffff"/>
+    <circle cx="475" cy="536" r="13" fill="#ffffff"/>
+    <circle cx="475" cy="591" r="13" fill="#ffffff"/>
+  </g>
+
+  <g id="webshare-wordmark" transform="translate(540 583) scale(0.083984375 -0.083984375)">
+    <path fill="#0b62f2" d="M1774 0H1315L1116 817Q1107 852 1096 991H1092Q1077 868 1063 817L848 0H362L20 1434H494L614 590Q617 574 623 497L629 414H635Q637 440 647 502.5Q657 565 666 596L887 1434H1358L1542 584L1555 499L1565 416H1569L1572 451L1585 590L1710 1434H2136ZM2626 391Q2637 325 2702 287.5Q2767 250 2874 250Q3023 250 3156 307V37Q3001 -25 2780 -25Q2512 -25 2363 112Q2214 249 2214 489Q2214 654 2279.5 780Q2345 906 2473.5 977.5Q2602 1049 2757 1049Q2916 1049 3029 987Q3142 925 3200.5 813Q3259 701 3259 551V391ZM2882 614Q2882 791 2755 791Q2702 791 2666 742.5Q2630 694 2624 614ZM4561 543Q4561 375 4505.5 245.5Q4450 116 4348 45.5Q4246 -25 4117 -25Q4018 -25 3947.5 11.5Q3877 48 3836 106H3832V0H3406V1516H3832V885H3836Q3886 961 3971.5 1005Q4057 1049 4160 1049Q4354 1049 4457.5 920Q4561 791 4561 543ZM4129 530Q4129 633 4089.5 685Q4050 737 3976 737Q3911 737 3867.5 682.5Q3824 628 3824 541V479Q3824 391 3863 339Q3902 287 3968 287Q4045 287 4087 350.5Q4129 414 4129 530Z"/>
+    <path fill="#12273e" d="M5756 434Q5756 291 5679.5 185Q5603 79 5465 27Q5327 -25 5133 -25Q4908 -25 4721 51V444Q4811 378 4920 337.5Q5029 297 5123 297Q5194 297 5233 322.5Q5272 348 5272 397Q5272 432 5252.5 458.5Q5233 485 5193.5 508Q5154 531 5047 571Q4701 704 4701 1001Q4701 1209 4859 1333.5Q5017 1458 5283 1458Q5358 1458 5421 1452Q5484 1446 5535.5 1437Q5587 1428 5680 1403V1038Q5499 1137 5324 1137Q5252 1137 5208 1110Q5164 1083 5164 1036Q5164 991 5199.5 961.5Q5235 932 5348 885Q5571 795 5663.5 688Q5756 581 5756 434ZM6552 0V584Q6552 737 6435 737Q6378 737 6348 693.5Q6318 650 6318 582V0H5892V1516H6318V885H6322Q6377 964 6455.5 1006.5Q6534 1049 6624 1049Q6790 1049 6877 942.5Q6964 836 6964 629V0ZM7724 0V156H7720Q7618 -25 7408 -25Q7263 -25 7181 61Q7099 147 7099 291Q7099 593 7470 641L7724 674Q7724 724 7679 756Q7634 788 7558 788Q7386 788 7195 690V967Q7278 1003 7403 1026Q7528 1049 7617 1049Q7878 1049 7995.5 937.5Q8113 826 8113 565V0ZM7472 348Q7472 306 7498.5 279Q7525 252 7574 252Q7641 252 7682.5 302Q7724 352 7724 430V469L7580 449Q7472 431 7472 348ZM9075 659Q9051 670 9010 679Q8969 688 8942 688Q8731 688 8731 444V0H8305V1024H8731V844H8735Q8774 941 8846 991.5Q8918 1042 9014 1042Q9049 1042 9075 1030ZM9565 391Q9576 325 9641 287.5Q9706 250 9813 250Q9962 250 10095 307V37Q9940 -25 9719 -25Q9451 -25 9302 112Q9153 249 9153 489Q9153 654 9218.5 780Q9284 906 9412.5 977.5Q9541 1049 9696 1049Q9855 1049 9968 987Q10081 925 10139.5 813Q10198 701 10198 551V391ZM9821 614Q9821 791 9694 791Q9641 791 9605 742.5Q9569 694 9563 614Z"/>
+  </g>
+</svg>

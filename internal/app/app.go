@@ -15,11 +15,11 @@ import (
 	"sync"
 	"time"
 
-	"static-host/internal/config"
-	"static-host/internal/model"
-	"static-host/internal/security"
-	"static-host/internal/storage"
-	"static-host/internal/store"
+	"webshare/internal/config"
+	"webshare/internal/model"
+	"webshare/internal/security"
+	"webshare/internal/storage"
+	"webshare/internal/store"
 )
 
 const (
@@ -29,11 +29,12 @@ const (
 
 // App 保存应用运行时依赖和项目端口服务状态。
 type App struct {
-	cfg            config.Config
-	store          *store.Store
-	files          storage.Manager
-	projectServers map[int64]*http.Server
-	projectMu      sync.Mutex
+	cfg             config.Config
+	store           *store.Store
+	files           storage.Manager
+	projectServers  map[int64]*http.Server
+	runtimeWarnings map[int64][]string
+	projectMu       sync.Mutex
 }
 
 // AdminCredential 是托盘菜单展示和重置管理员账号时返回的明文凭据。
@@ -52,11 +53,13 @@ func New(cfg config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	applySavedNetworkConfig(&cfg, db)
 	app := &App{
-		cfg:            cfg,
-		store:          db,
-		files:          storage.New(cfg.DataDir),
-		projectServers: map[int64]*http.Server{},
+		cfg:             cfg,
+		store:           db,
+		files:           storage.New(cfg.DataDir),
+		projectServers:  map[int64]*http.Server{},
+		runtimeWarnings: map[int64][]string{},
 	}
 	if err := app.ensureInitialAdmin(); err != nil {
 		_ = db.Close()
@@ -67,6 +70,7 @@ func New(cfg config.Config) (*App, error) {
 
 // Start 启动全部 HTTP 服务，并在上下文取消时优雅退出。
 func (a *App) Start(ctx context.Context) error {
+	log.Printf("运行配置: dataDir=%s adminAddr=%s shareAddr=%s portRange=%d-%d", a.cfg.DataDir, a.cfg.AdminAddr, a.cfg.ShareAddr, a.cfg.PortStart, a.cfg.PortEnd)
 	if err := a.startExistingProjectServers(); err != nil {
 		return err
 	}
@@ -90,13 +94,20 @@ func (a *App) Start(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
+		log.Print("正在关闭服务")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 		defer cancel()
 		_ = adminServer.Shutdown(shutdownCtx)
 		_ = shareServer.Shutdown(shutdownCtx)
 		a.stopAllProjectServers(shutdownCtx)
-		return a.store.Close()
+		if err := a.store.Close(); err != nil {
+			log.Printf("关闭数据库失败: %v", err)
+			return err
+		}
+		log.Print("服务已关闭")
+		return nil
 	case err := <-errCh:
+		log.Printf("服务异常退出: %v", err)
 		return err
 	}
 }
@@ -194,6 +205,7 @@ func (a *App) startExistingProjectServers() error {
 		if project.Active && project.AccessMode == model.AccessPort && project.Port > 0 {
 			if err := a.startProjectServer(project); err != nil {
 				log.Printf("项目端口启动失败 project=%d port=%d err=%v", project.ID, project.Port, err)
+				a.deactivateProjectAfterPortFailure(project, err)
 			}
 		}
 	}
@@ -222,6 +234,7 @@ func (a *App) startProjectServer(project model.Project) error {
 		return err
 	}
 	a.projectServers[project.ID] = server
+	delete(a.runtimeWarnings, project.ID)
 	go func() {
 		log.Printf("项目独立端口已启动: project=%d port=%d", project.ID, project.Port)
 		if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -229,6 +242,18 @@ func (a *App) startProjectServer(project model.Project) error {
 		}
 	}()
 	return nil
+}
+
+// deactivateProjectAfterPortFailure 在独立端口无法监听时停用项目并记录前端提示。
+func (a *App) deactivateProjectAfterPortFailure(project model.Project, cause error) {
+	project.Active = false
+	if _, err := a.store.UpdateProjectSettings(project); err != nil {
+		log.Printf("项目端口启动失败后停用项目失败 project=%d err=%v", project.ID, err)
+		return
+	}
+	a.projectMu.Lock()
+	a.runtimeWarnings[project.ID] = []string{fmt.Sprintf("项目独立端口 %d 启动失败，已自动停用。原因：%v", project.Port, cause)}
+	a.projectMu.Unlock()
 }
 
 // projectServerRunning 判断指定项目当前是否有独立端口服务。
@@ -246,6 +271,14 @@ func (a *App) stopProjectServer(projectID int64) {
 		_ = server.Close()
 		delete(a.projectServers, projectID)
 	}
+}
+
+// projectRuntimeWarnings 返回当前进程内记录的项目运行提示。
+func (a *App) projectRuntimeWarnings(projectID int64) []string {
+	a.projectMu.Lock()
+	defer a.projectMu.Unlock()
+	items := a.runtimeWarnings[projectID]
+	return append([]string{}, items...)
 }
 
 // stopAllProjectServers 关闭所有项目独立端口服务。

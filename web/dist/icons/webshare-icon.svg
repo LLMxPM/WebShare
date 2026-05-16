@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="80 280 480 480" role="img" aria-labelledby="title desc">
+  <title id="title">WebShare 图标</title>
+  <desc id="desc">WebShare 仅图标版本，移除右侧文字并保留几何图形标识。</desc>
+  <defs>
+    <linearGradient id="folderGradient" x1="159" y1="516" x2="423" y2="692" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#179DFF"/>
+      <stop offset="1" stop-color="#075BE8"/>
+    </linearGradient>
+    <linearGradient id="shareGradient" x1="397" y1="511" x2="503" y2="617" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1CDFBE"/>
+      <stop offset="1" stop-color="#12BFAE"/>
+    </linearGradient>
+    <mask id="shareGapMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1536" height="1024">
+      <rect width="1536" height="1024" fill="#ffffff"/>
+      <circle cx="450" cy="564" r="70" fill="#000000"/>
+    </mask>
+    <style>
+      .window-stroke {
+        fill: none;
+        stroke: #0c6ef5;
+        stroke-width: 18;
+        stroke-linecap: square;
+      }
+
+      .code-mark {
+        fill: none;
+        stroke: #0c6ef5;
+        stroke-width: 18;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .upload-mark {
+        fill: none;
+        stroke: #ffffff;
+        stroke-width: 18;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .share-mark {
+        fill: none;
+        stroke: #ffffff;
+        stroke-width: 10;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+    </style>
+  </defs>
+
+  <g id="webshare-icon" shape-rendering="geometricPrecision">
+    <g mask="url(#shareGapMask)">
+      <path fill="#0c6ef5" d="M115 387H132V616C132 630.4 143.6 642 158 642H164V659H156C133.4 659 115 640.6 115 618Z"/>
+      <path fill="#0c6ef5" d="M453 387H470V624H453Z"/>
+      <path fill="#12273e" d="M115 371C115 342.8 137.8 320 166 320H419C447.2 320 470 342.8 470 371V387H115Z"/>
+
+      <circle cx="162" cy="354" r="14" fill="#17d5b8"/>
+      <circle cx="199" cy="354" r="14" fill="#0b70f3"/>
+      <circle cx="236" cy="354" r="14" fill="#ccd4dc"/>
+
+      <path class="code-mark" d="M240 426L197 462L240 498"/>
+      <path class="code-mark" d="M318 417L289 507"/>
+      <path class="code-mark" d="M348 426L391 462L348 498"/>
+
+      <path fill="url(#folderGradient)" d="M180 516H236C246 516 254 522 258 531L268 551C272 558 279 562 287 562H410C417.2 562 423 567.8 423 575V668C423 681.3 412.3 692 399 692H183C169.7 692 159 681.3 159 668V537C159 525.4 168.4 516 180 516Z"/>
+      <path fill="#063fbf" opacity=".16" d="M357 612H423V668C423 681.3 412.3 692 399 692H309Z"/>
+      <path class="upload-mark" d="M270 656V585M229 624L270 583L311 624"/>
+    </g>
+
+    <circle cx="450" cy="564" r="61" fill="url(#shareGradient)"/>
+    <path class="share-mark" d="M424 563L475 536M424 563L475 591"/>
+    <circle cx="424" cy="563" r="13" fill="#ffffff"/>
+    <circle cx="475" cy="536" r="13" fill="#ffffff"/>
+    <circle cx="475" cy="591" r="13" fill="#ffffff"/>
+  </g>
+
+</svg>

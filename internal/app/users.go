@@ -8,8 +8,8 @@ import (
 	"net/mail"
 	"strings"
 
-	"static-host/internal/model"
-	"static-host/internal/security"
+	"webshare/internal/model"
+	"webshare/internal/security"
 )
 
 // handleUsers 分发用户管理相关接口，所有操作都要求管理员权限。

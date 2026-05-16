@@ -56,3 +56,13 @@ export interface PublicHostInfo {
   publicHost: string;
   candidates: string[];
 }
+
+export interface NetworkSettings {
+  sharePort: number;
+  portStart: number;
+  portEnd: number;
+  activeSharePort: number;
+  activePortStart: number;
+  activePortEnd: number;
+  restartRequired: boolean;
+}

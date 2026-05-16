@@ -4,7 +4,7 @@ package app
 import (
 	"testing"
 
-	"static-host/internal/model"
+	"webshare/internal/model"
 )
 
 // TestNormalizeShareState 验证分享状态只允许规划中的三种取值。

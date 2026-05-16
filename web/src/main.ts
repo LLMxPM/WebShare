@@ -1,16 +1,24 @@
 // 文件功能描述：实现管理后台单页应用，提供三栏工作台、项目标签页、用户管理和分享地址视图。
 import { api } from "./api";
-import type { AccessMode, FileEntry, Project, ProjectVersion, PublicHostInfo, ShareState, User } from "./types";
+import type { AccessMode, FileEntry, NetworkSettings, Project, ProjectVersion, PublicHostInfo, ShareState, User } from "./types";
 import "./styles.css";
 
 type ActiveView = "projects" | "users" | "share";
 type ProjectTab = "overview" | "publish" | "files" | "versions" | "settings";
 type ShareFilter = "all" | ShareState;
 type UserModalMode = "create" | "edit" | "reset";
+type AccountModalFocus = "email" | "password";
+type PublishKind = "zip" | "folder" | "html";
 
 interface UserModal {
   mode: UserModalMode;
   userId?: number;
+}
+
+interface CreateProjectUpload {
+  kind: PublishKind;
+  file?: File;
+  files?: FileList;
 }
 
 interface State {
@@ -21,12 +29,15 @@ interface State {
   versions: ProjectVersion[];
   files: FileEntry[];
   publicHostInfo: PublicHostInfo | null;
+  networkSettings: NetworkSettings | null;
   filePath: string;
   activeView: ActiveView;
   activeProjectTab: ProjectTab;
   projectSearch: string;
   projectShareFilter: ShareFilter;
   createModalOpen: boolean;
+  accountModalOpen: boolean;
+  accountModalFocus: AccountModalFocus;
   userSearch: string;
   userModal: UserModal | null;
   message: string;
@@ -42,12 +53,15 @@ const state: State = {
   versions: [],
   files: [],
   publicHostInfo: null,
+  networkSettings: null,
   filePath: "",
   activeView: "projects",
   activeProjectTab: "overview",
   projectSearch: "",
   projectShareFilter: "all",
   createModalOpen: false,
+  accountModalOpen: false,
+  accountModalFocus: "email",
   userSearch: "",
   userModal: null,
   message: "",
@@ -56,6 +70,8 @@ const state: State = {
 };
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
+const brandLogoURL = `${import.meta.env.BASE_URL}icons/webshare-logo.svg`;
+const brandIconURL = `${import.meta.env.BASE_URL}icons/webshare-icon.svg`;
 
 // init 初始化登录状态并渲染页面。
 async function init() {
@@ -90,12 +106,18 @@ async function loadUsers() {
 
 // refreshAdminData 刷新管理员专属的用户和系统配置数据。
 async function refreshAdminData() {
-  await Promise.all([loadUsers(), loadPublicHostInfo()]);
+  await Promise.all([loadUsers(), loadPublicHostInfo(), loadNetworkSettings()]);
 }
 
 // loadPublicHostInfo 刷新本机地址候选和当前公开分享主机。
 async function loadPublicHostInfo() {
   state.publicHostInfo = await api.publicHost();
+}
+
+// loadNetworkSettings 刷新分享网关和独立端口段配置。
+async function loadNetworkSettings() {
+  const { network } = await api.networkSettings();
+  state.networkSettings = network;
 }
 
 // refreshSelected 刷新当前项目的版本和文件列表。
@@ -149,19 +171,31 @@ function render() {
 function loginTemplate() {
   return `
     <main class="login-shell">
-      <form class="login-panel" data-form="login">
-        <div class="login-brand">
-          <span class="logo">SH</span>
-          <div>
-            <h1>静态项目托管</h1>
-            <p>内部管理控制台</p>
+      <section class="login-frame" aria-label="WebShare 登录">
+        <div class="login-visual" aria-hidden="true">
+          <div class="login-visual-surface">
+            <span></span>
+            <span></span>
+            <span></span>
           </div>
+          <img class="login-visual-icon" src="${brandIconURL}" alt="" />
         </div>
-        ${noticeTemplate()}
-        <label>用户名 / 邮箱<input name="username" autocomplete="username" required /></label>
-        <label>密码<input name="password" type="password" autocomplete="current-password" required /></label>
-        <button class="primary block" type="submit">登录</button>
-      </form>
+        <form class="login-panel" data-form="login">
+          <div class="login-brand">
+            <img class="brand-logo large" src="${brandLogoURL}" alt="WebShare" />
+            <div>
+              <h1>登录 WebShare</h1>
+              <p>内部管理控制台</p>
+            </div>
+          </div>
+          ${noticeTemplate()}
+          <div class="login-fields">
+            <label class="login-field">用户名 / 邮箱<input name="username" autocomplete="username" required autofocus /></label>
+            <label class="login-field">密码<input name="password" type="password" autocomplete="current-password" required /></label>
+          </div>
+          <button class="primary block login-submit" type="submit">登录</button>
+        </form>
+      </section>
     </main>
   `;
 }
@@ -177,6 +211,7 @@ function dashboardTemplate() {
         ${activeWorkspaceTemplate()}
       </section>
       ${state.createModalOpen && projectMode ? createProjectModalTemplate() : ""}
+      ${state.accountModalOpen ? accountModalTemplate() : ""}
       ${state.userModal && state.activeView === "users" ? userModalTemplate() : ""}
     </main>
   `;
@@ -195,11 +230,7 @@ function globalNavTemplate() {
   return `
     <aside class="global-nav">
       <div class="brand">
-        <span class="logo">SH</span>
-        <div>
-          <strong>Static Host</strong>
-          <span>静态项目托管</span>
-        </div>
+        <img class="brand-logo compact" src="${brandLogoURL}" alt="WebShare" />
       </div>
       <nav class="nav-stack">
         <button class="nav-item ${state.activeView === "projects" ? "active" : ""}" data-action="set-view" data-view="projects">
@@ -219,11 +250,58 @@ function globalNavTemplate() {
       <div class="account-box">
         <div>
           <strong>${escapeHTML(user.username)}</strong>
-          <span>${roleLabel(user.role)}</span>
+          <span>${roleLabel(user.role)}${user.email ? ` · ${escapeHTML(user.email)}` : ""}</span>
         </div>
-        <button data-action="logout">退出</button>
+        <div class="account-actions">
+          <button data-action="open-account-modal">账号设置</button>
+          <button data-action="logout">退出</button>
+        </div>
       </div>
     </aside>
+  `;
+}
+
+// accountModalTemplate 渲染当前用户自助修改邮箱和密码的弹窗。
+function accountModalTemplate() {
+  const user = state.me!;
+  const emailAutofocus = state.accountModalFocus === "email" ? "autofocus" : "";
+  const passwordAutofocus = state.accountModalFocus === "password" ? "autofocus" : "";
+  const emailForm = `
+    <form class="modal-form" data-form="account-email">
+      <label>邮箱<input name="email" type="email" value="${escapeAttr(user.email || "")}" placeholder="name@example.com" ${emailAutofocus} /></label>
+      <div class="modal-actions">
+        <button class="primary" type="submit">保存邮箱</button>
+      </div>
+    </form>
+  `;
+  const passwordForm = `
+    <form class="modal-form account-password-form" data-form="account-password">
+      <label>当前密码<input name="currentPassword" type="password" autocomplete="current-password" required ${passwordAutofocus} /></label>
+      <label>新密码<input name="newPassword" type="password" autocomplete="new-password" minlength="8" required /></label>
+      <div class="modal-actions">
+        <button type="button" data-action="close-account-modal">取消</button>
+        <button class="primary" type="submit">修改密码</button>
+      </div>
+    </form>
+  `;
+  return `
+    <div class="modal-backdrop" role="presentation">
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-label="账号设置">
+        <div class="modal-head">
+          <div>
+            <span class="eyebrow">账号设置</span>
+            <h2>${escapeHTML(user.username)}</h2>
+          </div>
+          <button class="ghost" type="button" data-action="close-account-modal">关闭</button>
+        </div>
+        <div class="account-modal-tabs">
+          <button class="${state.accountModalFocus === "email" ? "active" : ""}" type="button" data-action="set-account-focus" data-focus="email">修改邮箱</button>
+          <button class="${state.accountModalFocus === "password" ? "active" : ""}" type="button" data-action="set-account-focus" data-focus="password">修改密码</button>
+        </div>
+        ${noticeTemplate()}
+        ${state.accountModalFocus === "password" ? passwordForm : emailForm}
+      </section>
+    </div>
   `;
 }
 
@@ -244,7 +322,7 @@ function projectColumnTemplate() {
         <select data-change="share-filter">
           ${option("all", "全部状态", state.projectShareFilter)}
           ${option("public", "公开", state.projectShareFilter)}
-          ${option("share", "令牌分享", state.projectShareFilter)}
+          ${option("share", "密钥分享", state.projectShareFilter)}
           ${option("unshared", "不分享", state.projectShareFilter)}
         </select>
       </div>
@@ -257,7 +335,7 @@ function projectColumnTemplate() {
 function createProjectModalTemplate() {
   return `
     <div class="modal-backdrop" role="presentation">
-      <section class="modal-panel" role="dialog" aria-modal="true" aria-label="创建项目">
+      <section class="modal-panel create-project-panel" role="dialog" aria-modal="true" aria-label="创建项目">
         <div class="modal-head">
           <div>
             <span class="eyebrow">新建项目</span>
@@ -265,10 +343,43 @@ function createProjectModalTemplate() {
           </div>
           <button class="ghost" type="button" data-action="close-create-modal">关闭</button>
         </div>
-        <form class="modal-form" data-form="project">
+        <form class="modal-form create-project-form" data-form="project">
           <label>项目名称<input name="name" placeholder="例如：后台管理系统" required autofocus /></label>
-          <label>发布文件（可选）<input name="file" type="file" accept=".zip,.html,.htm,application/zip,text/html" /></label>
-          <div class="hint">项目标识会按日期和随机码自动生成；选择 ZIP 会按构建产物发布，选择 HTML 会作为 index.html 发布。</div>
+          <div class="create-upload-section">
+            <div class="create-upload-head">
+              <strong>发布内容（可选）</strong>
+              <span>项目标识会按日期和随机码自动生成。</span>
+            </div>
+            <div class="create-upload-grid">
+              <div class="upload-box create-upload-card">
+                <div class="upload-title"><span class="upload-type">ZIP</span><strong>ZIP 构建产物</strong></div>
+                <p>上传压缩后的构建目录。</p>
+                <label class="upload-picker">
+                  <input class="upload-input" name="zip" type="file" accept=".zip" data-create-file="zip" />
+                  <span>选择 ZIP 文件</span>
+                </label>
+                <div class="upload-summary" data-upload-summary>未选择文件</div>
+              </div>
+              <div class="upload-box create-upload-card">
+                <div class="upload-title"><span class="upload-type">DIR</span><strong>文件夹构建产物</strong></div>
+                <p>直接选择 dist 文件夹。</p>
+                <label class="upload-picker">
+                  <input class="upload-input" name="folder" type="file" data-create-file="folder" webkitdirectory directory multiple />
+                  <span>选择文件夹</span>
+                </label>
+                <div class="upload-summary" data-upload-summary>未选择文件夹</div>
+              </div>
+              <div class="upload-box create-upload-card">
+                <div class="upload-title"><span class="upload-type">HTML</span><strong>单 HTML 文件</strong></div>
+                <p>保存为 index.html。</p>
+                <label class="upload-picker">
+                  <input class="upload-input" name="html" type="file" accept=".html,.htm,text/html" data-create-file="html" />
+                  <span>选择 HTML 文件</span>
+                </label>
+                <div class="upload-summary" data-upload-summary>未选择文件</div>
+              </div>
+            </div>
+          </div>
           <div class="modal-actions">
             <button type="button" data-action="close-create-modal">取消</button>
             <button class="primary" type="submit">创建项目</button>
@@ -331,7 +442,7 @@ function projectHeroTemplate(project: Project) {
         ${project.active ? `<a class="button-link" href="${escapeAttr(project.accessUrl)}" target="_blank" rel="noreferrer">打开项目</a>` : `<button disabled>打开项目</button>`}
         ${project.currentVersionId ? `<a class="button-link" href="${escapeAttr(api.packageExeUrl(project.id))}">下载 EXE</a>` : `<button disabled>下载 EXE</button>`}
         <button data-action="set-tab" data-tab="publish">发布</button>
-        <button data-action="share-token">分享链接</button>
+        <button data-action="share-key">分享密钥</button>
         ${
           project.active
             ? `<button class="danger" data-action="deactivate-project">停用</button>`
@@ -342,7 +453,7 @@ function projectHeroTemplate(project: Project) {
         <span>访问地址</span>
         ${project.active ? `<a href="${escapeAttr(project.accessUrl)}" target="_blank" rel="noreferrer">${escapeHTML(project.accessUrl)}</a>` : `<code>${escapeHTML(project.accessUrl)}</code>`}
       </div>
-      ${state.shareUrl ? `<div class="access-strip token"><span>分享链接</span><code>${escapeHTML(state.shareUrl)}</code></div>` : ""}
+      ${state.shareUrl ? `<div class="access-strip key"><span>密钥链接</span><code>${escapeHTML(state.shareUrl)}</code></div>` : ""}
       <div class="summary-grid">
         ${summaryItem("BaseURL", project.detectedBaseUrl || "未识别")}
         ${summaryItem("入口文件", project.entryFile || "index.html")}
@@ -410,7 +521,7 @@ function overviewTabTemplate(project: Project) {
               </div>`
             : `<div class="status-card">
                 <strong>还没有发布版本</strong>
-                <span>上传 ZIP 构建产物或单 HTML 文件后，系统会识别 BaseURL 并生成访问地址。</span>
+                <span>上传 ZIP、文件夹构建产物或单 HTML 文件后，系统会识别 BaseURL 并生成访问地址。</span>
                 <button class="primary" data-action="set-tab" data-tab="publish">去发布</button>
               </div>`
         }
@@ -432,7 +543,7 @@ function overviewTabTemplate(project: Project) {
   `;
 }
 
-// publishTabTemplate 渲染 ZIP 和 HTML 发布表单。
+// publishTabTemplate 渲染 ZIP、文件夹和 HTML 发布表单。
 function publishTabTemplate(project: Project) {
   return `
     <section class="panel">
@@ -442,15 +553,33 @@ function publishTabTemplate(project: Project) {
       </div>
       <div class="publish-grid">
         <div class="upload-box">
-          <strong>ZIP 构建产物</strong>
-          <span>适合 Vite、Vue、React、Webpack 构建后的 dist 目录压缩包。</span>
-          <label>选择 ZIP<input name="zip" type="file" accept=".zip" data-file="zip" /></label>
+          <div class="upload-title"><span class="upload-type">ZIP</span><strong>ZIP 构建产物</strong></div>
+          <p>适合已经压缩好的 Vite、Vue、React、Webpack 构建目录。</p>
+          <label class="upload-picker">
+            <input class="upload-input" name="zip" type="file" accept=".zip" data-file="zip" />
+            <span>选择 ZIP 文件</span>
+          </label>
+          <div class="upload-summary" data-upload-summary="zip">未选择文件</div>
           <button class="primary" data-action="publish-zip" data-id="${project.id}">上传 ZIP</button>
         </div>
         <div class="upload-box">
-          <strong>单 HTML 文件</strong>
-          <span>上传后会保存为 index.html，并直接生成访问地址。</span>
-          <label>选择 HTML<input name="html" type="file" accept=".html,.htm,text/html" data-file="html" /></label>
+          <div class="upload-title"><span class="upload-type">DIR</span><strong>文件夹构建产物</strong></div>
+          <p>直接选择 dist 文件夹，系统会保留内部目录结构并创建完整版本。</p>
+          <label class="upload-picker">
+            <input class="upload-input" name="folder" type="file" data-file="folder" webkitdirectory directory multiple />
+            <span>选择文件夹</span>
+          </label>
+          <div class="upload-summary" data-upload-summary="folder">未选择文件夹</div>
+          <button class="primary" data-action="publish-folder" data-id="${project.id}">上传文件夹</button>
+        </div>
+        <div class="upload-box">
+          <div class="upload-title"><span class="upload-type">HTML</span><strong>单 HTML 文件</strong></div>
+          <p>上传后会保存为 index.html，适合没有独立静态资源的页面。</p>
+          <label class="upload-picker">
+            <input class="upload-input" name="html" type="file" accept=".html,.htm,text/html" data-file="html" />
+            <span>选择 HTML 文件</span>
+          </label>
+          <div class="upload-summary" data-upload-summary="html">未选择文件</div>
           <button data-action="publish-html" data-id="${project.id}">上传 HTML</button>
         </div>
       </div>
@@ -551,7 +680,7 @@ function settingsTabTemplate(project: Project) {
         <label>分享状态
           <select name="shareState">
             ${option("public", "公开", project.shareState)}
-            ${option("share", "分享令牌", project.shareState)}
+            ${option("share", "密钥分享", project.shareState)}
             ${option("unshared", "不分享", project.shareState)}
           </select>
         </label>
@@ -713,18 +842,24 @@ function userModalTemplate() {
 function shareAddressViewTemplate() {
   if (state.me?.role !== "admin") return `<section class="panel">${emptyInlineTemplate("需要管理员权限。")}</section>`;
   const current = state.publicHostInfo?.publicHost || "未设置";
+  const network = state.networkSettings;
+  const sharePort = network?.activeSharePort ?? 8081;
+  const portRange = network ? `${network.activePortStart}-${network.activePortEnd}` : "12000-12999";
   return `
     <div class="workspace-stack">
       ${noticeTemplate()}
       <section class="view-head">
         <div>
           <span class="eyebrow">分享地址</span>
-          <h1>访问主机管理</h1>
+          <h1>访问网络配置</h1>
         </div>
-        <span>只有管理员可以修改项目访问地址使用的主机。</span>
+        <span>只有管理员可以修改项目访问地址使用的主机和端口。</span>
       </section>
       <section class="panel">
         ${systemAddressTemplate()}
+      </section>
+      <section class="panel">
+        ${systemNetworkTemplate()}
       </section>
       <section class="panel">
         <div class="panel-head">
@@ -733,8 +868,8 @@ function shareAddressViewTemplate() {
         </div>
         <div class="info-list">
           <div><strong>管理后台</strong><span>继续使用 8080 端口，不受分享地址设置影响。</span></div>
-          <div><strong>路径分享</strong><span>项目地址会按当前主机和 8081 分享端口生成。</span></div>
-          <div><strong>独立端口</strong><span>端口模式项目会按当前主机和项目端口生成根路径访问地址。</span></div>
+          <div><strong>路径分享</strong><span>项目地址会按当前主机和 ${sharePort} 分享端口生成。</span></div>
+          <div><strong>独立端口</strong><span>端口模式项目会从 ${portRange} 中分配端口。</span></div>
         </div>
       </section>
     </div>
@@ -746,8 +881,9 @@ function systemAddressTemplate() {
   const info = state.publicHostInfo;
   const candidates = info?.candidates ?? [];
   const current = info?.publicHost ?? "";
+  const activeSharePort = state.networkSettings?.activeSharePort ?? 8081;
   const displayHost = current || "未设置";
-  const gatewayURL = current ? `${window.location.protocol}//${urlHost(current)}:8081/` : "未设置";
+  const gatewayURL = current ? `${window.location.protocol}//${urlHost(current)}:${activeSharePort}/` : "未设置";
   return `
     <div class="address-layout">
       <div class="address-current">
@@ -756,7 +892,7 @@ function systemAddressTemplate() {
         <code class="current-address">${escapeHTML(gatewayURL)}</code>
         <div class="address-meta">
           <div><strong>当前主机</strong><span>${escapeHTML(displayHost)}</span></div>
-          <div><strong>项目链接</strong><span>路径分享使用 8081；独立端口项目使用项目自己的端口。</span></div>
+          <div><strong>当前端口</strong><span>路径分享使用 ${activeSharePort}；独立端口项目使用项目自己的端口。</span></div>
         </div>
       </div>
       <form class="address-form" data-form="public-host">
@@ -781,12 +917,43 @@ function systemAddressTemplate() {
   `;
 }
 
+// systemNetworkTemplate 渲染重启后生效的分享网关和独立端口段配置。
+function systemNetworkTemplate() {
+  const network = state.networkSettings;
+  const sharePort = network?.sharePort ?? 8081;
+  const portStart = network?.portStart ?? 12000;
+  const portEnd = network?.portEnd ?? 12999;
+  const activeRange = network ? `${network.activePortStart}-${network.activePortEnd}` : "12000-12999";
+  return `
+    <form class="network-form" data-form="network-settings">
+      <div class="panel-head compact">
+        <div>
+          <h3>端口配置</h3>
+          <span>保存后重启软件生效。</span>
+        </div>
+        ${network?.restartRequired ? `<span class="restart-badge">待重启</span>` : `<span class="restart-badge ready">已生效</span>`}
+      </div>
+      <div class="network-grid">
+        <label>分享网关端口<input name="sharePort" type="number" min="1" max="65535" value="${sharePort}" required /></label>
+        <label>独立端口起点<input name="portStart" type="number" min="1" max="65535" value="${portStart}" required /></label>
+        <label>独立端口终点<input name="portEnd" type="number" min="1" max="65535" value="${portEnd}" required /></label>
+      </div>
+      <div class="runtime-strip">
+        <span>当前运行：分享网关 ${network?.activeSharePort ?? 8081}，独立端口 ${activeRange}</span>
+      </div>
+      <div class="form-actions">
+        <button class="primary" type="submit">保存端口配置</button>
+      </div>
+    </form>
+  `;
+}
+
 // emptyProjectTemplate 渲染没有项目时的空状态。
 function emptyProjectTemplate() {
   return `
     <section class="empty-state">
       <h2>还没有项目</h2>
-      <p>在中栏创建项目后，上传 ZIP 或 HTML 即可获得访问地址。</p>
+      <p>在中栏创建项目后，上传 ZIP、文件夹或 HTML 即可获得访问地址。</p>
     </section>
   `;
 }
@@ -812,6 +979,8 @@ function noticeTemplate() {
 function bindEvents() {
   app.querySelectorAll("form").forEach((form) => form.addEventListener("submit", onSubmit));
   app.querySelectorAll<HTMLElement>("[data-action]").forEach((el) => el.addEventListener("click", onAction));
+  app.querySelectorAll<HTMLInputElement>("input[data-file]").forEach((input) => input.addEventListener("change", onPublishFileChange));
+  app.querySelectorAll<HTMLInputElement>("input[data-create-file]").forEach((input) => input.addEventListener("change", onPublishFileChange));
   app.querySelector<HTMLInputElement>('[data-input="project-search"]')?.addEventListener("input", onProjectSearch);
   app.querySelector<HTMLInputElement>('[data-input="user-search"]')?.addEventListener("input", onUserSearch);
   app.querySelector<HTMLSelectElement>('[data-change="share-filter"]')?.addEventListener("change", onShareFilter);
@@ -835,6 +1004,16 @@ function onShareFilter(event: Event) {
   render();
 }
 
+// onPublishFileChange 更新发布卡片中的文件选择摘要。
+function onPublishFileChange(event: Event) {
+  const input = event.currentTarget as HTMLInputElement;
+  const kind = (input.dataset.file || input.dataset.createFile) as PublishKind;
+  if (input.dataset.createFile) resetCreateUploadSiblings(input);
+  const box = input.closest(".upload-box");
+  const summary = box?.querySelector<HTMLElement>("[data-upload-summary]");
+  if (summary) summary.textContent = publishFileSummary(kind, input);
+}
+
 // onSubmit 处理所有表单提交。
 async function onSubmit(event: Event) {
   event.preventDefault();
@@ -850,21 +1029,24 @@ async function onSubmit(event: Event) {
         break;
       }
       case "project": {
-        const file = data.get("file");
-        const uploadFile = file instanceof File && file.size > 0 ? file : null;
-        const kind = uploadFile ? detectPublishKind(uploadFile) : null;
+        const upload = selectedCreateProjectUpload(form);
         const { project } = await api.createProject({ name: String(data.get("name")) });
         state.selectedId = project.id;
         state.activeProjectTab = "overview";
         state.createModalOpen = false;
         await refreshAll();
-        if (uploadFile && kind === "zip") await api.publishZip(project.id, uploadFile);
-        if (uploadFile && kind === "html") await api.publishHtml(project.id, uploadFile);
+        if (upload) await publishCreateProjectUpload(project.id, upload);
         await refreshAll();
         break;
       }
       case "settings":
         await saveSettings(form);
+        break;
+      case "account-email":
+        await saveAccountEmail(form);
+        break;
+      case "account-password":
+        await changeOwnPassword(form);
         break;
       case "file":
         await uploadManagedFile(form);
@@ -892,6 +1074,17 @@ async function onSubmit(event: Event) {
         await refreshAll();
         break;
       }
+      case "network-settings": {
+        const { network } = await api.updateNetworkSettings({
+          sharePort: Number(data.get("sharePort")),
+          portStart: Number(data.get("portStart")),
+          portEnd: Number(data.get("portEnd")),
+        });
+        state.networkSettings = network;
+        state.message = network.restartRequired ? "端口配置已保存，重启软件后生效" : "端口配置已保存";
+        await refreshAll();
+        break;
+      }
     }
   });
 }
@@ -905,6 +1098,7 @@ async function onAction(event: Event) {
     const nextView = (target.dataset.view || "projects") as ActiveView;
     state.activeView = state.me?.role === "admin" || nextView === "projects" ? nextView : "projects";
     state.createModalOpen = false;
+    state.accountModalOpen = false;
     state.userModal = null;
     state.error = "";
     state.message = "";
@@ -945,6 +1139,7 @@ async function onAction(event: Event) {
   }
   if (action === "open-create-modal") {
     state.createModalOpen = true;
+    state.accountModalOpen = false;
     state.error = "";
     state.message = "";
     render();
@@ -957,8 +1152,33 @@ async function onAction(event: Event) {
     render();
     return;
   }
+  if (action === "open-account-modal") {
+    state.accountModalOpen = true;
+    state.accountModalFocus = "email";
+    state.createModalOpen = false;
+    state.userModal = null;
+    state.error = "";
+    state.message = "";
+    render();
+    return;
+  }
+  if (action === "set-account-focus") {
+    state.accountModalFocus = (target.dataset.focus || "email") as AccountModalFocus;
+    state.error = "";
+    state.message = "";
+    render();
+    return;
+  }
+  if (action === "close-account-modal") {
+    state.accountModalOpen = false;
+    state.error = "";
+    state.message = "";
+    render();
+    return;
+  }
   if (action === "open-user-modal") {
     state.userModal = { mode: (target.dataset.mode || "create") as UserModalMode, userId: Number(target.dataset.id) || undefined };
+    state.accountModalOpen = false;
     state.error = "";
     state.message = "";
     render();
@@ -977,6 +1197,7 @@ async function onAction(event: Event) {
       case "logout":
         await api.logout();
         state.me = null;
+        state.accountModalOpen = false;
         state.activeView = "projects";
         state.selectedId = null;
         break;
@@ -987,13 +1208,17 @@ async function onAction(event: Event) {
       case "publish-zip":
         await publishSelected("zip");
         break;
+      case "publish-folder":
+        await publishSelected("folder");
+        break;
       case "publish-html":
         await publishSelected("html");
         break;
-      case "share-token":
+      case "share-key":
         if (project) {
-          const result = await api.shareToken(project.id);
+          const result = await api.shareKey(project.id);
           state.shareUrl = result.shareUrl;
+          state.message = "分享密钥已生成";
           await refreshAll();
         }
         break;
@@ -1034,14 +1259,6 @@ async function onAction(event: Event) {
   });
 }
 
-// detectPublishKind 根据文件扩展名判断创建时发布类型。
-function detectPublishKind(file: File) {
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".zip")) return "zip";
-  if (name.endsWith(".html") || name.endsWith(".htm")) return "html";
-  throw new Error("创建时只支持上传 ZIP、HTML 或 HTM 文件");
-}
-
 // saveSettings 保存项目基础设置。
 async function saveSettings(form: HTMLFormElement) {
   const project = selectedProject();
@@ -1060,15 +1277,51 @@ async function saveSettings(form: HTMLFormElement) {
   await refreshAll();
 }
 
-// publishSelected 上传当前项目的 ZIP 或 HTML。
-async function publishSelected(kind: "zip" | "html") {
+// selectedCreateProjectUpload 返回新建项目弹窗中当前选择的发布内容。
+function selectedCreateProjectUpload(form: HTMLFormElement): CreateProjectUpload | null {
+  const zip = form.querySelector<HTMLInputElement>('input[data-create-file="zip"]')?.files?.[0];
+  if (zip && zip.size > 0) {
+    if (!zip.name.toLowerCase().endsWith(".zip")) throw new Error("创建时 ZIP 发布只支持 .zip 文件");
+    return { kind: "zip", file: zip };
+  }
+  const folderFiles = form.querySelector<HTMLInputElement>('input[data-create-file="folder"]')?.files;
+  if (folderFiles?.length) return { kind: "folder", files: folderFiles };
+  const html = form.querySelector<HTMLInputElement>('input[data-create-file="html"]')?.files?.[0];
+  if (html && html.size > 0) {
+    const name = html.name.toLowerCase();
+    if (!name.endsWith(".html") && !name.endsWith(".htm")) throw new Error("创建时 HTML 发布只支持 .html 或 .htm 文件");
+    return { kind: "html", file: html };
+  }
+  return null;
+}
+
+// publishCreateProjectUpload 将新建项目时选择的内容发布为首个版本。
+async function publishCreateProjectUpload(projectId: number, upload: CreateProjectUpload) {
+  if (upload.kind === "folder") {
+    if (!upload.files?.length) throw new Error("请选择文件夹");
+    await api.publishFolder(projectId, upload.files);
+    return;
+  }
+  if (!upload.file) throw new Error("请选择文件");
+  if (upload.kind === "zip") await api.publishZip(projectId, upload.file);
+  else await api.publishHtml(projectId, upload.file);
+}
+
+// publishSelected 上传当前项目的 ZIP、文件夹或 HTML。
+async function publishSelected(kind: PublishKind) {
   const project = selectedProject();
   if (!project) return;
   const input = app.querySelector<HTMLInputElement>(`input[data-file="${kind}"]`);
-  const file = input?.files?.[0];
-  if (!file) throw new Error("请选择文件");
-  if (kind === "zip") await api.publishZip(project.id, file);
-  else await api.publishHtml(project.id, file);
+  if (kind === "folder") {
+    const files = input?.files;
+    if (!files?.length) throw new Error("请选择文件夹");
+    await api.publishFolder(project.id, files);
+  } else {
+    const file = input?.files?.[0];
+    if (!file) throw new Error("请选择文件");
+    if (kind === "zip") await api.publishZip(project.id, file);
+    else await api.publishHtml(project.id, file);
+  }
   state.activeProjectTab = "overview";
   await refreshAll();
 }
@@ -1083,6 +1336,22 @@ async function uploadManagedFile(form: HTMLFormElement) {
   await api.putFile(project.id, String(data.get("path")), file);
   await refreshAll();
   state.activeProjectTab = "files";
+}
+
+// saveAccountEmail 保存当前登录用户自己的邮箱。
+async function saveAccountEmail(form: HTMLFormElement) {
+  const email = String(new FormData(form).get("email") || "");
+  const { user } = await api.updateMe({ email });
+  state.me = user;
+  if (user.role === "admin") await loadUsers();
+  state.message = "邮箱已保存";
+}
+
+// changeOwnPassword 修改当前登录用户自己的密码。
+async function changeOwnPassword(form: HTMLFormElement) {
+  const data = new FormData(form);
+  await api.changeOwnPassword(String(data.get("currentPassword")), String(data.get("newPassword")));
+  state.message = "密码已修改";
 }
 
 // saveUser 保存用户名称、邮箱、角色和禁用状态。
@@ -1183,7 +1452,7 @@ function accessModeLabel(mode: AccessMode | string) {
 
 // shareStateLabel 返回分享状态的中文展示文案。
 function shareStateLabel(value: ShareState | string) {
-  const labels: Record<string, string> = { public: "公开", share: "令牌分享", unshared: "不分享" };
+  const labels: Record<string, string> = { public: "公开", share: "密钥分享", unshared: "不分享" };
   return labels[value] || value;
 }
 
@@ -1192,6 +1461,34 @@ function formatSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
+// publishFileSummary 返回发布卡片中文件选择摘要。
+function publishFileSummary(kind: PublishKind, input: HTMLInputElement) {
+  const files = Array.from(input.files ?? []);
+  if (!files.length) return kind === "folder" ? "未选择文件夹" : "未选择文件";
+  if (kind !== "folder") return `${files[0].name} · ${formatSize(files[0].size)}`;
+  const total = files.reduce((sum, file) => sum + file.size, 0);
+  return `${selectedFolderName(files)} · ${files.length} 个文件 · ${formatSize(total)}`;
+}
+
+// resetCreateUploadSiblings 保证新建项目时 ZIP、文件夹和 HTML 只选择一种。
+function resetCreateUploadSiblings(input: HTMLInputElement) {
+  const form = input.closest("form");
+  form?.querySelectorAll<HTMLInputElement>("input[data-create-file]").forEach((other) => {
+    if (other === input) return;
+    other.value = "";
+    const kind = other.dataset.createFile as PublishKind;
+    const summary = other.closest(".upload-box")?.querySelector<HTMLElement>("[data-upload-summary]");
+    if (summary) summary.textContent = publishFileSummary(kind, other);
+  });
+}
+
+// selectedFolderName 从浏览器提供的相对路径中提取被选中的文件夹名。
+function selectedFolderName(files: File[]) {
+  const first = files[0] as File & { webkitRelativePath?: string };
+  const root = (first.webkitRelativePath || "").replaceAll("\\", "/").split("/").filter(Boolean)[0];
+  return root || "已选文件夹";
 }
 
 // formatDate 格式化日期时间。

@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"static-host/internal/config"
-	"static-host/internal/exebundle"
-	"static-host/internal/model"
+	"webshare/internal/config"
+	"webshare/internal/exebundle"
+	"webshare/internal/model"
 )
 
 // TestBuildProjectEXE 验证打包器能把壳文件、静态 zip、manifest 和 footer 拼成可读 EXE。

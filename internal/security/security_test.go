@@ -65,6 +65,22 @@ func TestRandomPassword(t *testing.T) {
 	}
 }
 
+// TestRandomShareKey 验证分享密钥长度固定且只包含易输入的字母数字。
+func TestRandomShareKey(t *testing.T) {
+	key, err := RandomShareKey(6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(key) != 6 {
+		t.Fatalf("密钥长度 = %d, want 6", len(key))
+	}
+	for _, char := range key {
+		if !strings.ContainsRune(shareKeyAlphabet, char) {
+			t.Fatalf("密钥包含不在允许字符集内的字符: %q", key)
+		}
+	}
+}
+
 // TestTokenHashStable 验证相同令牌摘要稳定且可常量时间比较。
 func TestTokenHashStable(t *testing.T) {
 	a := TokenHash("token")

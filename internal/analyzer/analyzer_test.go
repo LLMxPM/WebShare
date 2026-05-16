@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"static-host/internal/model"
+	"webshare/internal/model"
 )
 
 // TestAnalyzeRelativeBase 验证相对资源路径推荐标准路径模式。

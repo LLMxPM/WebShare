@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"static-host/internal/model"
-	"static-host/internal/security"
+	"webshare/internal/model"
+	"webshare/internal/security"
 )
 
 // handleProjects 分发项目相关 API。
@@ -68,8 +68,8 @@ func (a *App) handleProjects(w http.ResponseWriter, r *http.Request, tail string
 		a.handleVersions(w, r, project, parts[2:])
 	case "files":
 		a.handleFiles(w, r, project)
-	case "share-token":
-		a.regenerateShareToken(w, r, project)
+	case "share-key":
+		a.regenerateShareKey(w, r, project)
 	default:
 		writeError(w, http.StatusNotFound, "接口不存在")
 	}
@@ -299,27 +299,27 @@ func (a *App) deleteProject(w http.ResponseWriter, r *http.Request, project mode
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// regenerateShareToken 生成新的分享令牌；明文只在本次响应中返回。
-func (a *App) regenerateShareToken(w http.ResponseWriter, r *http.Request, project model.Project) {
+// regenerateShareKey 生成新的分享密钥；明文只在本次响应中返回。
+func (a *App) regenerateShareKey(w http.ResponseWriter, r *http.Request, project model.Project) {
 	if r.Method != http.MethodPost {
 		writeError(w, http.StatusMethodNotAllowed, "方法不允许")
 		return
 	}
-	token, err := security.RandomToken(24)
+	key, err := security.RandomShareKey(6)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "生成分享令牌失败")
+		writeError(w, http.StatusInternalServerError, "生成分享密钥失败")
 		return
 	}
 	project.ShareState = model.ShareToken
-	project.ShareTokenHash = security.TokenHash(token)
+	project.ShareTokenHash = security.TokenHash(key)
 	updated, err := a.store.UpdateProjectSettings(project)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "保存分享令牌失败")
+		writeError(w, http.StatusInternalServerError, "保存分享密钥失败")
 		return
 	}
 	dto := a.projectDTO(updated, r)
-	dto.ShareURL = dto.AccessURL + "?token=" + token
-	writeJSON(w, http.StatusOK, map[string]any{"project": dto, "token": token, "shareUrl": dto.ShareURL})
+	dto.ShareURL = dto.AccessURL + "?key=" + key
+	writeJSON(w, http.StatusOK, map[string]any{"project": dto, "key": key, "shareUrl": dto.ShareURL})
 }
 
 // handleVersions 处理版本列表和回滚。

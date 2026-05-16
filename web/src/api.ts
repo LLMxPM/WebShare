@@ -1,8 +1,13 @@
 // 文件功能描述：封装管理前端的 API 请求、上传和错误处理。
-import type { FileEntry, Project, ProjectVersion, PublicHostInfo, User } from "./types";
+import type { FileEntry, NetworkSettings, Project, ProjectVersion, PublicHostInfo, User } from "./types";
 
 export interface APIError extends Error {
   status?: number;
+}
+
+interface FolderUploadItem {
+  file: File;
+  path: string;
 }
 
 // request 发送 JSON 请求并解析响应，失败时抛出带状态码的错误。
@@ -29,8 +34,46 @@ export function uploadFile<T>(url: string, file: File): Promise<T> {
   return request<T>(url, { method: "POST", body });
 }
 
+// uploadFolder 使用 multipart/form-data 上传文件夹中的多文件构建产物。
+export function uploadFolder<T>(url: string, files: FileList | File[]): Promise<T> {
+  const items = normalizeFolderFiles(files);
+  const body = new FormData();
+  body.set(
+    "manifest",
+    JSON.stringify({
+      files: items.map((item, index) => ({ field: `file_${index}`, path: item.path, size: item.file.size })),
+    }),
+  );
+  items.forEach((item, index) => body.append(`file_${index}`, item.file, item.file.name));
+  return request<T>(url, { method: "POST", body });
+}
+
+// normalizeFolderFiles 生成服务端写入需要的项目内相对路径。
+function normalizeFolderFiles(files: FileList | File[]): FolderUploadItem[] {
+  const items = Array.from(files)
+    .map((file) => ({ file, path: normalizeFolderPath(file) }))
+    .filter((item) => item.path);
+  if (!items.length) throw new Error("请选择包含文件的文件夹");
+  return items;
+}
+
+// normalizeFolderPath 去掉浏览器文件夹选择产生的首层目录名。
+function normalizeFolderPath(file: File) {
+  const raw = ((file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name).replaceAll("\\", "/");
+  const parts = raw.split("/").filter(Boolean);
+  if (parts.length > 1) return parts.slice(1).join("/");
+  return parts[0] || "";
+}
+
 export const api = {
   me: () => request<{ user: User }>("/api/me"),
+  updateMe: (payload: { email: string }) =>
+    request<{ user: User }>("/api/me", { method: "PATCH", body: JSON.stringify(payload) }),
+  changeOwnPassword: (currentPassword: string, newPassword: string) =>
+    request<{ ok: boolean }>("/api/me/password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
   login: (username: string, password: string) =>
     request<{ user: User }>("/api/auth/login", {
       method: "POST",
@@ -57,6 +100,8 @@ export const api = {
   deleteProject: (id: number) => request<{ ok: boolean }>(`/api/projects/${id}`, { method: "DELETE" }),
   publishZip: (id: number, file: File) => uploadFile<{ project: Project; version: ProjectVersion }>(`/api/projects/${id}/publish/zip`, file),
   publishHtml: (id: number, file: File) => uploadFile<{ project: Project; version: ProjectVersion }>(`/api/projects/${id}/publish/html`, file),
+  publishFolder: (id: number, files: FileList | File[]) =>
+    uploadFolder<{ project: Project; version: ProjectVersion }>(`/api/projects/${id}/publish/folder`, files),
   packageExeUrl: (id: number) => `/api/projects/${id}/packages/exe`,
   versions: (id: number) => request<{ versions: ProjectVersion[] }>(`/api/projects/${id}/versions`),
   activateVersion: (id: number, versionId: number) =>
@@ -74,8 +119,11 @@ export const api = {
     }),
   deleteFile: (id: number, path: string) =>
     request<{ project: Project; version: ProjectVersion }>(`/api/projects/${id}/files?path=${encodeURIComponent(path)}`, { method: "DELETE" }),
-  shareToken: (id: number) => request<{ project: Project; token: string; shareUrl: string }>(`/api/projects/${id}/share-token`, { method: "POST" }),
+  shareKey: (id: number) => request<{ project: Project; key: string; shareUrl: string }>(`/api/projects/${id}/share-key`, { method: "POST" }),
   publicHost: () => request<PublicHostInfo>("/api/system/public-host"),
   updatePublicHost: (publicHost: string) =>
     request<PublicHostInfo>("/api/system/public-host", { method: "PATCH", body: JSON.stringify({ publicHost }) }),
+  networkSettings: () => request<{ network: NetworkSettings }>("/api/system/network"),
+  updateNetworkSettings: (payload: { sharePort: number; portStart: number; portEnd: number }) =>
+    request<{ network: NetworkSettings }>("/api/system/network", { method: "PATCH", body: JSON.stringify(payload) }),
 };

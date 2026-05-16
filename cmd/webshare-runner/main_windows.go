@@ -11,7 +11,7 @@ import (
 
 	"github.com/getlantern/systray"
 
-	"static-host/internal/exebundle"
+	"webshare/internal/exebundle"
 )
 
 // runnerApp 保存壳程序运行期间的服务、资源目录和当前访问地址。
