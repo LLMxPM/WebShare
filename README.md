@@ -37,4 +37,9 @@ go run ./cmd/webshare
 
 - [开发文档](docs/development.md)：本地开发、项目结构、构建测试和代码约定。
 - [部署文档](docs/deployment.md)：容器部署、Windows 单 EXE 交付、端口和环境变量。
+- [CI/CD 自动发布](docs/ci-cd.md)：GitHub Actions、Release 和 Docker Hub 推送配置。
 - [使用文档](docs/usage.md)：登录、发布项目、分享地址、版本管理和常见路径选择。
+
+## 许可证
+
+本项目使用 [Apache License 2.0](LICENSE) 开源协议。

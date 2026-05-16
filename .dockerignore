@@ -1,0 +1,14 @@
+# 文件功能描述：缩小 Docker 构建上下文，排除本地数据、依赖和临时产物。
+.codex
+.git
+.github
+data
+release
+node_modules
+web/node_modules
+web/dist
+*.db
+*.db-*
+*.exe
+*.log
+.DS_Store
