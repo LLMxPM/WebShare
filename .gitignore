@@ -8,3 +8,4 @@ bin/
 node_modules/
 web/node_modules/
 .DS_Store
+release/
