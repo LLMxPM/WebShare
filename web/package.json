@@ -2,6 +2,7 @@
   "name": "webshare-web",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "pnpm@10.30.3",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -13,4 +14,3 @@
     "vite": "^7.2.7"
   }
 }
-

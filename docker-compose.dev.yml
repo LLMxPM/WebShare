@@ -1,0 +1,25 @@
+# 文件功能描述：提供从本地源码构建并运行 WebShare 的 Docker Compose 开发配置。
+services:
+  webshare:
+    build: .
+    container_name: webshare-dev
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      ADMIN_ADDR: ":8080"
+      SHARE_ADDR: ":8081"
+      PUBLIC_HOST: localhost
+      PUBLIC_SCHEME: http
+      PORT_START: "12000"
+      PORT_END: "12999"
+      LOG_STDOUT: "true"
+      LOG_FILE: /data/logs/webshare.log
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "12000-12999:12000-12999"
+    volumes:
+      - webshare-dev-data:/data
+
+volumes:
+  webshare-dev-data:

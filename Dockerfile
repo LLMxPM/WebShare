@@ -1,8 +1,9 @@
 # 文件功能描述：构建管理前端并打包 Go 单体应用的容器镜像。
 FROM node:22-alpine AS web-builder
 WORKDIR /src
+ARG PNPM_VERSION=10.30.3
 COPY web/package.json web/pnpm-lock.yaml ./web/
-RUN corepack enable && pnpm --dir web install --frozen-lockfile
+RUN npm install --global pnpm@${PNPM_VERSION} && pnpm --dir web install --frozen-lockfile
 COPY web ./web
 RUN pnpm --dir web build
 

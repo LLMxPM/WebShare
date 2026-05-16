@@ -7,6 +7,8 @@
 - `.github/workflows/ci.yml`：推送 `main`、`master` 或提交拉取请求时，安装前端依赖、构建前端并执行 `go test ./...`。
 - `.github/workflows/release.yml`：推送 `main`、`master` 或手动触发时，构建 Windows 发布包、创建 GitHub Release，并在配置 Docker Hub 后推送镜像。
 
+Docker 镜像发布流程直接使用仓库根目录的 `Dockerfile` 构建，不依赖 `docker-compose.yml`。`docker-compose.yml` 只作为部署入口，`docker-compose.dev.yml` 只作为本地源码构建入口。
+
 ## 版本规则
 
 主分支推送会自动生成 `v0.1.<run_number>` 版本号，例如 `v0.1.27`。手动触发 `Release` 工作流时，可以输入 `version` 覆盖自动版本号，格式应类似 `v1.2.3` 或 `v1.2.3-rc.1`。
@@ -22,7 +24,7 @@
 
 在 `Settings -> Secrets and variables -> Actions -> Variables` 配置：
 
-- `DOCKERHUB_REPOSITORY`：Docker Hub 镜像名，例如 `llmxpm/webshare`。
+- `DOCKERHUB_REPOSITORY`：Docker Hub 镜像名，当前项目使用 `llmxpm/webshare`。
 
 如果没有配置 `DOCKERHUB_REPOSITORY`，Docker 推送任务会跳过；Windows Release 仍会正常生成。配置了 `DOCKERHUB_REPOSITORY` 后，如果缺少 Docker Hub 密钥，发布流程会失败并提示缺少的配置。
 

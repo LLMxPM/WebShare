@@ -1,19 +1,22 @@
-# 文件功能描述：提供本地容器部署示例，包含管理端口、分享端口和独立端口池。
+# 文件功能描述：提供使用 Docker Hub 镜像部署 WebShare 的默认 Docker Compose 配置。
 services:
   webshare:
-    build: .
+    image: llmxpm/webshare:latest
     container_name: webshare
     restart: unless-stopped
     environment:
       DATA_DIR: /data
-      ADMIN_ADDR: :8080
-      SHARE_ADDR: :8081
-      PUBLIC_HOST: localhost
+      ADMIN_ADDR: ":8080"
+      SHARE_ADDR: ":8081"
+      # 修改为宿主机在局域网内可访问的 IP 或主机名。
+      PUBLIC_HOST: "192.168.1.10"
       PUBLIC_SCHEME: http
-      PORT_START: 12000
-      PORT_END: 12999
+      PORT_START: "12000"
+      PORT_END: "12999"
       LOG_STDOUT: "true"
       LOG_FILE: /data/logs/webshare.log
+      # 首次启动如需固定管理员密码，可以取消下一行注释并修改密码。
+      # INIT_ADMIN_PASSWORD: "change-me-123"
     ports:
       - "8080:8080"
       - "8081:8081"

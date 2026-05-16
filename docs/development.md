@@ -26,7 +26,7 @@ scripts/                   构建脚本
 docs/                      项目文档
 ```
 
-## 本地开发
+## 本地快速运行
 
 安装前端依赖：
 
@@ -46,7 +46,14 @@ pnpm --dir web build
 go run ./cmd/webshare
 ```
 
-默认管理后台地址为 `http://localhost:8080/admin/`。如果数据库中没有用户，首次启动会创建管理员；没有设置 `INIT_ADMIN_PASSWORD` 时，日志会输出一次性密码。
+启动后访问：
+
+- 管理后台：`http://localhost:8080/admin/`
+- 分享网关：`http://localhost:8081/`
+
+首次启动会创建管理员账号。若未设置 `INIT_ADMIN_PASSWORD`，服务日志会输出一次性密码。
+
+本地运行日志默认写入 `data/logs/webshare.log`。
 
 ## 常用命令
 
