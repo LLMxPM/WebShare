@@ -55,7 +55,7 @@ func loadWithFlagSet(args []string, flags *flag.FlagSet) Config {
 		PortEnd:        envInt("PORT_END", 12999),
 		MaxUploadBytes: int64(envInt("MAX_UPLOAD_MB", 300)) * 1024 * 1024,
 		InitAdminUser:  env("INIT_ADMIN_USER", "admin"),
-		RunnerStubPath: env("RUNNER_STUB_PATH", "bin/webshare-runner-windows-amd64.exe"),
+		RunnerStubPath: env("RUNNER_STUB_PATH", "release/webshare-runner-windows-amd64.exe"),
 		LogFile:        strings.TrimSpace(os.Getenv("LOG_FILE")),
 		LogStdout:      envBool("LOG_STDOUT", defaultLogStdout()),
 		LogMaxSizeMB:   envInt("LOG_MAX_SIZE_MB", defaultLogMaxSizeMB),

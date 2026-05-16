@@ -55,9 +55,10 @@ docker compose exec webshare tail -f /data/logs/webshare.log
 
 ```text
 release/webshare.exe
+release/webshare-runner-windows-amd64.exe
 ```
 
-交付时只需要发送 `release/webshare.exe`。用户双击后，程序会进入 Windows 系统托盘，自动打开管理后台，并在 exe 所在目录生成 `data/` 目录保存数据库和上传项目。
+交付时只需要发送 `release/webshare.exe`；`release/webshare-runner-windows-amd64.exe` 是用于构建内嵌壳程序的输出文件。用户双击后，程序会进入 Windows 系统托盘，自动打开管理后台，并在 exe 所在目录生成 `data/` 目录保存数据库和上传项目。
 
 Windows 单 EXE 默认不打开控制台，运行日志写入 exe 同级目录下的 `data/logs/webshare.log`。
 
@@ -84,7 +85,7 @@ Windows 单 EXE 默认不打开控制台，运行日志写入 exe 同级目录�
 | `MAX_UPLOAD_MB` | `300` | 上传文件大小限制 |
 | `INIT_ADMIN_USER` | `admin` | 首次启动管理员用户名 |
 | `INIT_ADMIN_PASSWORD` | 空 | 首次启动管理员密码 |
-| `RUNNER_STUB_PATH` | `bin/webshare-runner-windows-amd64.exe` | 下载项目 EXE 时使用的预编译 Windows 壳程序 |
+| `RUNNER_STUB_PATH` | `release/webshare-runner-windows-amd64.exe` | 下载项目 EXE 时使用的预编译 Windows 壳程序 |
 | `LOG_FILE` | `<DATA_DIR>/logs/webshare.log` | 运行日志文件路径 |
 | `LOG_STDOUT` | Linux/Docker 为 `true`，Windows 为 `false` | 是否同时输出到标准输出 |
 | `LOG_MAX_SIZE_MB` | `10` | 单个日志文件最大体积 MB |

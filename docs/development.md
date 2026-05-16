@@ -59,13 +59,13 @@ go test ./...
 构建项目运行壳：
 
 ```powershell
-go build -ldflags="-H windowsgui" -o bin/webshare-runner-windows-amd64.exe ./cmd/webshare-runner
+go build -ldflags="-H windowsgui" -o release/webshare-runner-windows-amd64.exe ./cmd/webshare-runner
 ```
 
 把运行壳复制到后端默认读取位置：
 
 ```powershell
-Copy-Item bin/webshare-runner-windows-amd64.exe internal/runnerstub/webshare-runner-windows-amd64.exe
+Copy-Item release/webshare-runner-windows-amd64.exe internal/runnerstub/webshare-runner-windows-amd64.exe
 ```
 
 构建内嵌运行壳的 Windows 主程序：
