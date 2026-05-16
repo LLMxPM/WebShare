@@ -1,0 +1,24 @@
+# 文件功能描述：提供本地容器部署示例，包含管理端口、分享端口和独立端口池。
+services:
+  static-host:
+    build: .
+    container_name: static-host
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      ADMIN_ADDR: :8080
+      SHARE_ADDR: :8081
+      PUBLIC_HOST: localhost
+      PUBLIC_SCHEME: http
+      PORT_START: 12000
+      PORT_END: 12999
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "12000-12999:12000-12999"
+    volumes:
+      - static-host-data:/data
+
+volumes:
+  static-host-data:
+
