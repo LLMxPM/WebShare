@@ -1,4 +1,4 @@
-// 文件功能描述：校验项目 slug、挂载路径、分享状态和访问模式，集中处理路径冲突规则。
+// 文件功能描述：校验项目 slug、标签、挂载路径、分享状态和访问模式，集中处理路径冲突规则。
 package app
 
 import (
@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"webshare/internal/model"
 )
@@ -18,6 +19,11 @@ var reservedPaths = []string{"/api/", "/admin/", "/p/", "/assets/", "/healthz/"}
 var reservedWords = map[string]bool{
 	"api": true, "admin": true, "p": true, "assets": true, "healthz": true,
 }
+
+const (
+	maxProjectTags     = 20
+	maxProjectTagRunes = 32
+)
 
 // validateSlug 校验项目 slug 格式、保留词和唯一性。
 func (a *App) validateSlug(slug string, excludeID int64) error {
@@ -70,6 +76,31 @@ func randomSlugCode(length int) (string, error) {
 		b.WriteByte(alphabet[int(item)%len(alphabet)])
 	}
 	return b.String(), nil
+}
+
+// normalizeProjectTags 清洗项目标签，保证长度、数量和大小写不敏感唯一性。
+func normalizeProjectTags(tags []string) ([]string, error) {
+	normalized := make([]string, 0, len(tags))
+	seen := map[string]bool{}
+	for _, raw := range tags {
+		tag := strings.TrimSpace(raw)
+		if tag == "" {
+			continue
+		}
+		if utf8.RuneCountInString(tag) > maxProjectTagRunes {
+			return nil, errors.New("单个标签不能超过 32 个字符")
+		}
+		key := strings.ToLower(tag)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		normalized = append(normalized, tag)
+		if len(normalized) > maxProjectTags {
+			return nil, errors.New("单个项目最多设置 20 个标签")
+		}
+	}
+	return normalized, nil
 }
 
 // validateMountPath 校验自定义挂载路径格式和系统保留路径。

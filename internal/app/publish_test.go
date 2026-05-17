@@ -123,7 +123,7 @@ func newPublishTestApp(t *testing.T) *App {
 // createPublishTestProject 创建发布测试项目。
 func createPublishTestProject(t *testing.T, app *App, slug string) model.Project {
 	t.Helper()
-	project, err := app.store.CreateProject(1, "发布测试 "+slug, slug)
+	project, err := app.store.CreateProject(1, "发布测试 "+slug, slug, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,6 +17,7 @@ export interface Project {
   ownerId: number;
   name: string;
   slug: string;
+  tags: string[];
   shareState: ShareState;
   entryFile: string;
   spaEnabled: boolean;

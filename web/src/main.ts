@@ -35,6 +35,7 @@ interface State {
   activeProjectTab: ProjectTab;
   projectSearch: string;
   projectShareFilter: ShareFilter;
+  projectTagFilters: string[];
   createModalOpen: boolean;
   accountModalOpen: boolean;
   accountModalFocus: AccountModalFocus;
@@ -59,6 +60,7 @@ const state: State = {
   activeProjectTab: "overview",
   projectSearch: "",
   projectShareFilter: "all",
+  projectTagFilters: [],
   createModalOpen: false,
   accountModalOpen: false,
   accountModalFocus: "email",
@@ -92,6 +94,7 @@ async function refreshAll() {
   if ((state.activeView === "users" || state.activeView === "share") && !isAdmin) state.activeView = "projects";
   const [{ projects }] = await Promise.all([api.projects(), isAdmin ? refreshAdminData() : Promise.resolve()]);
   state.projects = projects ?? [];
+  pruneProjectTagFilters();
   if (!state.selectedId || !state.projects.some((project) => project.id === state.selectedId)) {
     state.selectedId = state.projects[0]?.id ?? null;
   }
@@ -138,14 +141,43 @@ function selectedProject() {
   return state.projects.find((project) => project.id === state.selectedId) || null;
 }
 
-// filteredProjects 返回应用本地搜索和分享状态筛选后的项目列表。
+// filteredProjects 返回应用本地搜索、分享状态和标签筛选后的项目列表。
 function filteredProjects() {
   const keyword = state.projectSearch.trim().toLowerCase();
+  const tagFilters = state.projectTagFilters.map((tag) => tag.toLowerCase());
   return state.projects.filter((project) => {
-    const matchesKeyword = !keyword || project.name.toLowerCase().includes(keyword) || project.slug.toLowerCase().includes(keyword);
+    const projectTags = project.tags ?? [];
+    const tagKeys = new Set(projectTags.map((tag) => tag.toLowerCase()));
+    const matchesKeyword =
+      !keyword ||
+      project.name.toLowerCase().includes(keyword) ||
+      project.slug.toLowerCase().includes(keyword) ||
+      projectTags.some((tag) => tag.toLowerCase().includes(keyword));
     const matchesShare = state.projectShareFilter === "all" || project.shareState === state.projectShareFilter;
-    return matchesKeyword && matchesShare;
+    const matchesTags = tagFilters.every((tag) => tagKeys.has(tag));
+    return matchesKeyword && matchesShare && matchesTags;
   });
+}
+
+// availableProjectTags 汇总当前用户可见项目中的标签，用于列表筛选。
+function availableProjectTags() {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  state.projects.forEach((project) => {
+    (project.tags ?? []).forEach((tag) => {
+      const key = tag.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      tags.push(tag);
+    });
+  });
+  return tags.sort((left, right) => left.localeCompare(right, "zh-CN"));
+}
+
+// pruneProjectTagFilters 移除刷新后已经不可见的标签筛选项。
+function pruneProjectTagFilters() {
+  const available = new Set(availableProjectTags().map((tag) => tag.toLowerCase()));
+  state.projectTagFilters = state.projectTagFilters.filter((tag) => available.has(tag.toLowerCase()));
 }
 
 // filteredUsers 返回匹配用户名、邮箱和角色的用户列表。
@@ -308,6 +340,7 @@ function accountModalTemplate() {
 // projectColumnTemplate 渲染中栏项目列表、搜索、筛选和创建表单。
 function projectColumnTemplate() {
   const items = filteredProjects();
+  const tags = availableProjectTags();
   return `
     <aside class="project-column">
       <div class="column-head">
@@ -318,21 +351,60 @@ function projectColumnTemplate() {
         <button class="primary" data-action="open-create-modal">新建</button>
       </div>
       <div class="project-filters">
-        <input data-input="project-search" value="${escapeAttr(state.projectSearch)}" placeholder="搜索项目名称或标识" />
-        <select data-change="share-filter">
-          ${option("all", "全部状态", state.projectShareFilter)}
-          ${option("public", "公开", state.projectShareFilter)}
-          ${option("share", "密钥分享", state.projectShareFilter)}
-          ${option("unshared", "不分享", state.projectShareFilter)}
-        </select>
+        <div class="filter-row">
+          <input data-input="project-search" value="${escapeAttr(state.projectSearch)}" placeholder="搜索项目名称、标识或标签" />
+          <select data-change="share-filter">
+            ${option("all", "全部状态", state.projectShareFilter)}
+            ${option("public", "公开", state.projectShareFilter)}
+            ${option("share", "密钥分享", state.projectShareFilter)}
+            ${option("unshared", "不分享", state.projectShareFilter)}
+          </select>
+        </div>
+        ${tags.length ? projectTagFiltersTemplate(tags) : ""}
       </div>
       <div class="project-list">${items.map(projectItemTemplate).join("") || `<p class="empty">没有匹配项目</p>`}</div>
     </aside>
   `;
 }
 
+// projectTagFiltersTemplate 渲染项目列表中的多选标签筛选。
+function projectTagFiltersTemplate(tags: string[]) {
+  return `
+    <div class="tag-filter-row" aria-label="项目标签筛选">
+      ${tags.map((tag) => tagFilterButtonTemplate(tag)).join("")}
+      ${state.projectTagFilters.length ? `<button class="tag-filter clear" data-action="clear-tag-filter" type="button">清除</button>` : ""}
+    </div>
+  `;
+}
+
+// tagFilterButtonTemplate 渲染单个标签筛选按钮。
+function tagFilterButtonTemplate(tag: string) {
+  const active = state.projectTagFilters.some((item) => item.toLowerCase() === tag.toLowerCase());
+  return `<button class="tag-filter ${active ? "active" : ""}" data-action="toggle-tag-filter" data-tag="${escapeAttr(tag)}" type="button">${escapeHTML(tag)}</button>`;
+}
+
+// tagPickerTemplate 渲染表单内可复用的已有标签选择区。
+function tagPickerTemplate(tags: string[], selectedTags: string[] | null | undefined) {
+  if (!tags.length) return "";
+  const selected = new Set((selectedTags ?? []).map((tag) => tag.toLowerCase()));
+  return `
+    <div class="tag-picker">
+      <span>已有标签</span>
+      <div class="tag-choice-row">
+        ${tags.map((tag) => tagPickerButtonTemplate(tag, selected.has(tag.toLowerCase()))).join("")}
+      </div>
+    </div>
+  `;
+}
+
+// tagPickerButtonTemplate 渲染表单里的单个已有标签按钮。
+function tagPickerButtonTemplate(tag: string, active: boolean) {
+  return `<button class="tag-choice ${active ? "active" : ""}" data-action="toggle-form-tag" data-tag="${escapeAttr(tag)}" type="button">${escapeHTML(tag)}</button>`;
+}
+
 // createProjectModalTemplate 渲染创建项目弹窗，支持创建时直接选择发布文件。
 function createProjectModalTemplate() {
+  const tags = availableProjectTags();
   return `
     <div class="modal-backdrop" role="presentation">
       <section class="modal-panel create-project-panel" role="dialog" aria-modal="true" aria-label="创建项目">
@@ -345,6 +417,8 @@ function createProjectModalTemplate() {
         </div>
         <form class="modal-form create-project-form" data-form="project">
           <label>项目名称<input name="name" placeholder="例如：后台管理系统" required autofocus /></label>
+          <label>标签<input name="tags" placeholder="例如：客户A, 演示, 已上线" /></label>
+          ${tagPickerTemplate(tags, [])}
           <div class="create-upload-section">
             <div class="create-upload-head">
               <strong>发布内容（可选）</strong>
@@ -393,9 +467,11 @@ function createProjectModalTemplate() {
 // projectItemTemplate 渲染项目列表项。
 function projectItemTemplate(project: Project) {
   const active = project.id === state.selectedId ? "active" : "";
+  const tags = projectTagsTemplate(project.tags, "project-tags compact");
   return `
     <button class="project-item ${active}" data-action="select-project" data-id="${project.id}">
       <span class="project-name">${escapeHTML(project.name)}</span>
+      ${tags}
       <span class="project-meta">
         <b>${escapeHTML(project.slug)}</b>
         <em>${accessModeLabel(project.accessMode)}</em>
@@ -436,6 +512,7 @@ function projectHeroTemplate(project: Project) {
         </div>
         <h1>${escapeHTML(project.name)}</h1>
         <div class="slug-line">${escapeHTML(project.slug)}</div>
+        ${projectTagsTemplate(project.tags, "project-tags hero-tags")}
       </div>
       <div class="hero-actions">
         <button class="primary" data-action="copy-link" data-url="${escapeAttr(project.accessUrl)}" ${project.active ? "" : "disabled"}>复制地址</button>
@@ -659,6 +736,7 @@ function versionsTabTemplate(project: Project) {
 
 // settingsTabTemplate 渲染项目低频配置表单。
 function settingsTabTemplate(project: Project) {
+  const tags = availableProjectTags();
   return `
     <form class="panel" data-form="settings">
       <div class="panel-head">
@@ -668,6 +746,10 @@ function settingsTabTemplate(project: Project) {
       <div class="field-grid">
         <label>名称<input name="name" value="${escapeAttr(project.name)}" /></label>
         <label>项目标识<input name="slug" value="${escapeAttr(project.slug)}" /></label>
+        <div class="field-span">
+          <label>标签<input name="tags" value="${escapeAttr(tagsInputValue(project.tags))}" placeholder="例如：客户A, 演示, 已上线" /></label>
+          ${tagPickerTemplate(tags, project.tags)}
+        </div>
         <label>入口文件<input name="entryFile" value="${escapeAttr(project.entryFile)}" /></label>
         <label>挂载路径<input name="mountPath" value="${escapeAttr(project.mountPath)}" placeholder="/demo/" /></label>
         <label>访问模式
@@ -1030,7 +1112,7 @@ async function onSubmit(event: Event) {
       }
       case "project": {
         const upload = selectedCreateProjectUpload(form);
-        const { project } = await api.createProject({ name: String(data.get("name")) });
+        const { project } = await api.createProject({ name: String(data.get("name")), tags: parseTagsInput(String(data.get("tags") || "")) });
         state.selectedId = project.id;
         state.activeProjectTab = "overview";
         state.createModalOpen = false;
@@ -1109,6 +1191,24 @@ async function onAction(event: Event) {
       state.error = error instanceof Error ? error.message : "加载视图失败";
     }
     render();
+    return;
+  }
+  if (action === "toggle-tag-filter") {
+    toggleProjectTagFilter(target.dataset.tag || "");
+    state.error = "";
+    state.message = "";
+    render();
+    return;
+  }
+  if (action === "clear-tag-filter") {
+    state.projectTagFilters = [];
+    state.error = "";
+    state.message = "";
+    render();
+    return;
+  }
+  if (action === "toggle-form-tag") {
+    toggleFormTag(target);
     return;
   }
   if (action === "set-tab") {
@@ -1267,6 +1367,7 @@ async function saveSettings(form: HTMLFormElement) {
   await api.updateProject(project.id, {
     name: String(data.get("name")),
     slug: String(data.get("slug")),
+    tags: parseTagsInput(String(data.get("tags") || "")),
     entryFile: String(data.get("entryFile")),
     mountPath: String(data.get("mountPath")),
     accessMode: String(data.get("accessMode")),
@@ -1275,6 +1376,40 @@ async function saveSettings(form: HTMLFormElement) {
   });
   state.activeProjectTab = "overview";
   await refreshAll();
+}
+
+// toggleProjectTagFilter 切换项目列表中的单个标签筛选项。
+function toggleProjectTagFilter(tag: string) {
+  const value = tag.trim();
+  if (!value) return;
+  const key = value.toLowerCase();
+  if (state.projectTagFilters.some((item) => item.toLowerCase() === key)) {
+    state.projectTagFilters = state.projectTagFilters.filter((item) => item.toLowerCase() !== key);
+    return;
+  }
+  state.projectTagFilters = [...state.projectTagFilters, value];
+}
+
+// toggleFormTag 在创建或设置表单中切换已有标签，并同步输入框文本。
+function toggleFormTag(target: HTMLElement) {
+  const tag = (target.dataset.tag || "").trim();
+  const form = target.closest("form");
+  const input = form?.querySelector<HTMLInputElement>('input[name="tags"]');
+  if (!tag || !form || !input) return;
+  const key = tag.toLowerCase();
+  const current = parseTagsInput(input.value);
+  const exists = current.some((item) => item.toLowerCase() === key);
+  const next = exists ? current.filter((item) => item.toLowerCase() !== key) : [...current, tag];
+  input.value = tagsInputValue(next);
+  syncFormTagChoices(form, next);
+}
+
+// syncFormTagChoices 根据输入框内容刷新表单内已有标签按钮状态。
+function syncFormTagChoices(form: Element, selectedTags: string[]) {
+  const selected = new Set(selectedTags.map((tag) => tag.toLowerCase()));
+  form.querySelectorAll<HTMLElement>('[data-action="toggle-form-tag"]').forEach((button) => {
+    button.classList.toggle("active", selected.has((button.dataset.tag || "").toLowerCase()));
+  });
 }
 
 // selectedCreateProjectUpload 返回新建项目弹窗中当前选择的发布内容。
@@ -1427,6 +1562,26 @@ async function copyText(text: string) {
 // summaryItem 渲染项目概要字段。
 function summaryItem(label: string, value: string) {
   return `<div class="summary-item"><span>${escapeHTML(label)}</span><strong>${escapeHTML(value)}</strong></div>`;
+}
+
+// projectTagsTemplate 渲染项目标签列表，无标签时不占位。
+function projectTagsTemplate(tags: string[] | null | undefined, className: string) {
+  const items = tags ?? [];
+  if (!items.length) return "";
+  return `<span class="${className}">${items.map((tag) => `<i>${escapeHTML(tag)}</i>`).join("")}</span>`;
+}
+
+// parseTagsInput 将逗号分隔的标签文本转换为 API 需要的数组。
+function parseTagsInput(value: string) {
+  return value
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+// tagsInputValue 将项目标签数组还原为设置表单中的逗号分隔文本。
+function tagsInputValue(tags: string[] | null | undefined) {
+  return (tags ?? []).join(", ");
 }
 
 // option 渲染 select 选项。

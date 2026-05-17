@@ -236,6 +236,9 @@ func (a *App) publicHostWithPort(port string) string {
 
 // projectDTO 组装项目访问地址和最近版本警告。
 func (a *App) projectDTO(project model.Project, r *http.Request) model.ProjectDTO {
+	if project.Tags == nil {
+		project.Tags = []string{}
+	}
 	dto := model.ProjectDTO{Project: project, Warnings: []string{}}
 	shareHost := a.publicHostWithPort(a.cfg.SharePort())
 	dto.AccessURL = fmt.Sprintf("%s://%s/p/%s/", a.cfg.PublicScheme, shareHost, project.Slug)

@@ -92,8 +92,9 @@ func (a *App) listProjects(w http.ResponseWriter, r *http.Request) {
 // createProject 创建项目并返回可用访问地址。
 func (a *App) createProject(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name string `json:"name"`
-		Slug string `json:"slug"`
+		Name string   `json:"name"`
+		Slug string   `json:"slug"`
+		Tags []string `json:"tags"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "请求格式错误")
@@ -117,7 +118,12 @@ func (a *App) createProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	project, err := a.store.CreateProject(currentUser(r).ID, name, slug)
+	tags, err := normalizeProjectTags(req.Tags)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	project, err := a.store.CreateProject(currentUser(r).ID, name, slug, tags)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "创建项目失败")
 		return
@@ -128,13 +134,14 @@ func (a *App) createProject(w http.ResponseWriter, r *http.Request) {
 // updateProject 更新项目基础设置、分享状态和访问模式。
 func (a *App) updateProject(w http.ResponseWriter, r *http.Request, project model.Project) {
 	var req struct {
-		Name       *string `json:"name"`
-		Slug       *string `json:"slug"`
-		ShareState *string `json:"shareState"`
-		EntryFile  *string `json:"entryFile"`
-		SPAEnabled *bool   `json:"spaEnabled"`
-		MountPath  *string `json:"mountPath"`
-		AccessMode *string `json:"accessMode"`
+		Name       *string   `json:"name"`
+		Slug       *string   `json:"slug"`
+		ShareState *string   `json:"shareState"`
+		EntryFile  *string   `json:"entryFile"`
+		SPAEnabled *bool     `json:"spaEnabled"`
+		MountPath  *string   `json:"mountPath"`
+		AccessMode *string   `json:"accessMode"`
+		Tags       *[]string `json:"tags"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "请求格式错误")
@@ -189,6 +196,14 @@ func (a *App) updateProject(w http.ResponseWriter, r *http.Request, project mode
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+	}
+	if req.Tags != nil {
+		tags, err := normalizeProjectTags(*req.Tags)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		project.Tags = tags
 	}
 	if err := a.prepareProjectAccess(&project); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())

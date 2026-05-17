@@ -91,7 +91,7 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
   projects: () => request<{ projects: Project[] }>("/api/projects"),
-  createProject: (payload: { name: string; slug?: string }) =>
+  createProject: (payload: { name: string; slug?: string; tags?: string[] }) =>
     request<{ project: Project }>("/api/projects", { method: "POST", body: JSON.stringify(payload) }),
   updateProject: (id: number, payload: Record<string, unknown>) =>
     request<{ project: Project }>(`/api/projects/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),

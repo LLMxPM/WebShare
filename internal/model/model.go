@@ -39,6 +39,7 @@ type Project struct {
 	OwnerID          int64     `json:"ownerId"`
 	Name             string    `json:"name"`
 	Slug             string    `json:"slug"`
+	Tags             []string  `json:"tags"`
 	ShareState       string    `json:"shareState"`
 	ShareTokenHash   string    `json:"-"`
 	EntryFile        string    `json:"entryFile"`

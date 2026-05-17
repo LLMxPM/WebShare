@@ -210,7 +210,7 @@ func newActivationTestApp(t *testing.T) *App {
 // createActivationTestProject 创建测试项目并保持默认激活状态。
 func createActivationTestProject(t *testing.T, app *App, slug string) model.Project {
 	t.Helper()
-	project, err := app.store.CreateProject(1, slug, slug)
+	project, err := app.store.CreateProject(1, slug, slug, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

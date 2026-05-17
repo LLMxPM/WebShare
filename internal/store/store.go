@@ -69,6 +69,7 @@ func (s *Store) migrate() error {
 			owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 			name TEXT NOT NULL,
 			slug TEXT NOT NULL UNIQUE,
+			tags_json TEXT NOT NULL DEFAULT '[]',
 			share_state TEXT NOT NULL,
 			share_token_hash TEXT NOT NULL DEFAULT '',
 			entry_file TEXT NOT NULL DEFAULT 'index.html',
@@ -110,6 +111,9 @@ func (s *Store) migrate() error {
 		return err
 	}
 	if err := s.addColumnIfMissing("projects", "active", "INTEGER NOT NULL DEFAULT 1"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("projects", "tags_json", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
 		return err
 	}
 	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email <> ''`); err != nil {
@@ -287,12 +291,12 @@ func (s *Store) UserBySession(tokenHash string) (model.User, error) {
 	return scanUser(row)
 }
 
-// CreateProject 创建项目基础记录。
-func (s *Store) CreateProject(ownerID int64, name, slug string) (model.Project, error) {
+// CreateProject 创建项目基础记录，并保存已清洗的项目标签。
+func (s *Store) CreateProject(ownerID int64, name, slug string, tags []string) (model.Project, error) {
 	now := time.Now().UTC()
-	res, err := s.db.Exec(`INSERT INTO projects(owner_id, name, slug, share_state, entry_file, spa_enabled, access_mode, active, created_at, updated_at)
-		VALUES(?, ?, ?, ?, 'index.html', 1, ?, 1, ?, ?)`,
-		ownerID, name, slug, model.SharePublic, model.AccessPath, formatTime(now), formatTime(now))
+	res, err := s.db.Exec(`INSERT INTO projects(owner_id, name, slug, tags_json, share_state, entry_file, spa_enabled, access_mode, active, created_at, updated_at)
+		VALUES(?, ?, ?, ?, ?, 'index.html', 1, ?, 1, ?, ?)`,
+		ownerID, name, slug, projectTagsJSON(tags), model.SharePublic, model.AccessPath, formatTime(now), formatTime(now))
 	if err != nil {
 		return model.Project{}, err
 	}
@@ -370,10 +374,10 @@ func (s *Store) ListAllProjects() ([]model.Project, error) {
 // UpdateProjectSettings 更新项目可变配置。
 func (s *Store) UpdateProjectSettings(project model.Project) (model.Project, error) {
 	project.UpdatedAt = time.Now().UTC()
-	_, err := s.db.Exec(`UPDATE projects SET name = ?, slug = ?, share_state = ?, share_token_hash = ?, entry_file = ?,
+	_, err := s.db.Exec(`UPDATE projects SET name = ?, slug = ?, tags_json = ?, share_state = ?, share_token_hash = ?, entry_file = ?,
 		spa_enabled = ?, detected_base_url = ?, mount_path = ?, port = ?, access_mode = ?, active = ?, current_version_id = ?, updated_at = ?
 		WHERE id = ?`,
-		project.Name, project.Slug, project.ShareState, project.ShareTokenHash, project.EntryFile, boolInt(project.SPAEnabled),
+		project.Name, project.Slug, projectTagsJSON(project.Tags), project.ShareState, project.ShareTokenHash, project.EntryFile, boolInt(project.SPAEnabled),
 		project.DetectedBaseURL, project.MountPath, project.Port, project.AccessMode, boolInt(project.Active), project.CurrentVersionID,
 		formatTime(project.UpdatedAt), project.ID)
 	if err != nil {
@@ -514,7 +518,7 @@ func (s *Store) ActivateVersion(project model.Project, version model.ProjectVers
 
 // projectSelectSQL 返回项目查询的基础 SELECT 语句。
 func projectSelectSQL() string {
-	return `SELECT p.id, p.owner_id, p.name, p.slug, p.share_state, p.share_token_hash, p.entry_file,
+	return `SELECT p.id, p.owner_id, p.name, p.slug, p.tags_json, p.share_state, p.share_token_hash, p.entry_file,
 		p.spa_enabled, p.detected_base_url, p.mount_path, p.port, p.access_mode, p.active, p.current_version_id,
 		p.created_at, p.updated_at FROM projects p`
 }
@@ -539,18 +543,34 @@ func scanUser(row rowScanner) (model.User, error) {
 // scanProject 从数据库行读取项目模型。
 func scanProject(row rowScanner) (model.Project, error) {
 	var project model.Project
+	var tagsJSON string
 	var spa, active int
 	var created, updated string
-	if err := row.Scan(&project.ID, &project.OwnerID, &project.Name, &project.Slug, &project.ShareState,
+	if err := row.Scan(&project.ID, &project.OwnerID, &project.Name, &project.Slug, &tagsJSON, &project.ShareState,
 		&project.ShareTokenHash, &project.EntryFile, &spa, &project.DetectedBaseURL, &project.MountPath,
 		&project.Port, &project.AccessMode, &active, &project.CurrentVersionID, &created, &updated); err != nil {
 		return model.Project{}, err
+	}
+	if err := json.Unmarshal([]byte(tagsJSON), &project.Tags); err != nil {
+		return model.Project{}, err
+	}
+	if project.Tags == nil {
+		project.Tags = []string{}
 	}
 	project.SPAEnabled = spa != 0
 	project.Active = active != 0
 	project.CreatedAt = parseTime(created)
 	project.UpdatedAt = parseTime(updated)
 	return project, nil
+}
+
+// projectTagsJSON 将项目标签序列化为数据库字段，空值保持为空数组。
+func projectTagsJSON(tags []string) string {
+	if tags == nil {
+		tags = []string{}
+	}
+	data, _ := json.Marshal(tags)
+	return string(data)
 }
 
 // scanVersion 从数据库行读取项目版本模型。

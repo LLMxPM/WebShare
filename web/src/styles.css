@@ -441,6 +441,62 @@ code {
   gap: 9px;
 }
 
+.filter-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 9px;
+}
+
+.tag-filter-row,
+.project-tags,
+.tag-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tag-filter,
+.tag-choice {
+  min-height: 28px;
+  border-color: #d6dee7;
+  border-radius: 999px;
+  background: #f7f9fb;
+  color: #536170;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tag-filter.active,
+.tag-choice.active {
+  border-color: #b9d4ce;
+  background: #eaf7f3;
+  color: #0f5f58;
+}
+
+.tag-filter.clear {
+  border-color: #e0b8b2;
+  background: #fff7f5;
+  color: #a12f2f;
+}
+
+.tag-picker {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid #edf1f5;
+  border-radius: 8px;
+  background: #fafbfc;
+  padding: 9px;
+}
+
+.tag-picker > span {
+  color: #73808f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .create-form {
   padding: 14px;
   border: 1px solid #e1e6ec;
@@ -562,7 +618,13 @@ code {
 .project-item {
   width: 100%;
   display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  grid-template-areas:
+    "name tags"
+    "meta meta"
+    "pills pills";
   gap: 7px;
+  align-items: start;
   text-align: left;
   justify-content: stretch;
   border-color: #e0e6ed;
@@ -586,7 +648,16 @@ code {
 }
 
 .project-name {
+  grid-area: name;
   font-weight: 800;
+}
+
+.project-meta {
+  grid-area: meta;
+}
+
+.project-item .mini-pills {
+  grid-area: pills;
 }
 
 .project-meta,
@@ -608,6 +679,40 @@ code {
 .mini-pills {
   justify-content: flex-start;
   flex-wrap: wrap;
+}
+
+.project-tags {
+  justify-content: flex-start;
+}
+
+.project-item .project-tags.compact {
+  grid-area: tags;
+  max-width: 150px;
+  justify-content: flex-end;
+}
+
+.project-tags i {
+  max-width: 100%;
+  min-height: 22px;
+  border: 1px solid #d6dee7;
+  border-radius: 999px;
+  background: #f7f9fb;
+  color: #536170;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.project-tags.compact i {
+  max-width: 150px;
+}
+
+.hero-tags {
+  margin-top: 10px;
 }
 
 .mini-pills i {
@@ -963,6 +1068,13 @@ code {
 
 .field-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.field-span {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  min-width: 0;
 }
 
 .check {
@@ -1435,6 +1547,7 @@ code {
     .create-upload-grid,
     .network-grid,
     .field-grid,
+    .filter-row,
   .file-upload,
   .user-create,
   .view-head,
