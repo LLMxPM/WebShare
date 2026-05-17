@@ -32,6 +32,40 @@ func TestAnalyzeFixedBase(t *testing.T) {
 	}
 }
 
+// TestAnalyzeMultiLevelFixedBase 验证多级固定前缀可以完整识别为挂载路径。
+func TestAnalyzeMultiLevelFixedBase(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "index.html"), `<script src="/team/demo/assets/app.js"></script>`)
+
+	result := Analyze(root, "index.html")
+	if result.BaseKind != model.BaseFixed || result.RecommendedMode != model.AccessMount || result.RecommendedMount != "/team/demo/" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+// TestAnalyzeMultiLevelRootFileAsset 验证 favicon 等根文件型静态资源也支持多级前缀。
+func TestAnalyzeMultiLevelRootFileAsset(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "index.html"), `<link rel="icon" href="/team/demo/favicon.ico">`)
+
+	result := Analyze(root, "index.html")
+	if result.BaseKind != model.BaseFixed || result.RecommendedMount != "/team/demo/" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+// TestAnalyzeMultiLevelBaseByFileProbe 验证无静态资源目录时通过文件命中推断最长 base。
+func TestAnalyzeMultiLevelBaseByFileProbe(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "index.html"), `<script src="/team/demo/main.js"></script>`)
+	writeFile(t, filepath.Join(root, "main.js"), `console.log("ok")`)
+
+	result := Analyze(root, "index.html")
+	if result.BaseKind != model.BaseFixed || result.RecommendedMount != "/team/demo/" {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
 // TestAnalyzeRootBase 验证根路径依赖推荐独立端口。
 func TestAnalyzeRootBase(t *testing.T) {
 	root := t.TempDir()

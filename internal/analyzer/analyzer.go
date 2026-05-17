@@ -40,7 +40,7 @@ func Analyze(root, entryFile string) model.BaseAnalysis {
 		applyBase(&analysis, root, []string{base}, true)
 	} else {
 		paths := collectHTMLAssetPaths(html)
-		applyBase(&analysis, root, inferBases(paths), false)
+		applyBase(&analysis, root, inferBases(root, paths), false)
 	}
 	analysis.Warnings = append(analysis.Warnings, riskWarnings(root, html)...)
 	analysis.Warnings = uniqueStrings(analysis.Warnings)
@@ -79,8 +79,8 @@ func collectHTMLAssetPaths(html string) []string {
 	return paths
 }
 
-// inferBases 根据入口资源路径推断主静态资源 base。
-func inferBases(paths []string) []string {
+// inferBases 根据入口资源路径和项目文件结构推断主静态资源 base。
+func inferBases(root string, paths []string) []string {
 	if len(paths) == 0 {
 		return []string{"."}
 	}
@@ -94,26 +94,79 @@ func inferBases(paths []string) []string {
 			set["."] = true
 			continue
 		}
-		set[inferAbsoluteBase(path)] = true
+		set[inferAbsoluteBase(root, path)] = true
 	}
 	return mapKeys(set)
 }
 
 // inferAbsoluteBase 从绝对资源路径中识别根路径或固定前缀。
-func inferAbsoluteBase(path string) string {
-	cleaned := "/" + strings.TrimLeft(path, "/")
-	parts := strings.Split(strings.Trim(cleaned, "/"), "/")
+func inferAbsoluteBase(root, path string) string {
+	parts := splitAssetPath(path)
 	if len(parts) == 0 || parts[0] == "" {
 		return "/"
 	}
-	if looksRootAsset(parts[0]) {
-		return "/"
+	if base, ok := inferBaseByStaticSegment(parts); ok {
+		return base
+	}
+	if base, ok := inferBaseByFileProbe(root, parts); ok {
+		return base
 	}
 	return "/" + parts[0] + "/"
 }
 
-// looksRootAsset 判断首段是否像根路径静态资源目录或文件。
-func looksRootAsset(segment string) bool {
+// splitAssetPath 清理资源路径中的查询参数并拆分为 URL 路径片段。
+func splitAssetPath(value string) []string {
+	value = strings.TrimSpace(value)
+	if index := strings.IndexAny(value, "?#"); index >= 0 {
+		value = value[:index]
+	}
+	trimmed := strings.Trim(value, "/")
+	if trimmed == "" {
+		return nil
+	}
+	rawParts := strings.Split(trimmed, "/")
+	parts := make([]string, 0, len(rawParts))
+	for _, part := range rawParts {
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
+// inferBaseByStaticSegment 根据常见静态资源目录或文件位置推断 base URL。
+func inferBaseByStaticSegment(parts []string) (string, bool) {
+	for index, part := range parts {
+		if !looksStaticResourceSegment(part) {
+			continue
+		}
+		if index == 0 {
+			return "/", true
+		}
+		return "/" + strings.Join(parts[:index], "/") + "/", true
+	}
+	return "", false
+}
+
+// inferBaseByFileProbe 通过剥离最长 URL 前缀后能否命中文件来推断 base URL。
+func inferBaseByFileProbe(root string, parts []string) (string, bool) {
+	for prefixLen := len(parts) - 1; prefixLen >= 0; prefixLen-- {
+		rel := strings.Join(parts[prefixLen:], "/")
+		if rel == "" {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+			if prefixLen == 0 {
+				return "/", true
+			}
+			return "/" + strings.Join(parts[:prefixLen], "/") + "/", true
+		}
+	}
+	return "", false
+}
+
+// looksStaticResourceSegment 判断路径片段是否像静态资源目录或根文件。
+func looksStaticResourceSegment(segment string) bool {
 	known := map[string]bool{
 		"assets": true, "asset": true, "static": true, "js": true, "css": true, "img": true,
 		"images": true, "fonts": true, "font": true, "media": true, "favicon.ico": true,
