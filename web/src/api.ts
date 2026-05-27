@@ -106,6 +106,8 @@ export const api = {
   versions: (id: number) => request<{ versions: ProjectVersion[] }>(`/api/projects/${id}/versions`),
   activateVersion: (id: number, versionId: number) =>
     request<{ project: Project }>(`/api/projects/${id}/versions/${versionId}/activate`, { method: "POST" }),
+  updateVersionPinned: (id: number, versionId: number, pinned: boolean) =>
+    request<{ version: ProjectVersion }>(`/api/projects/${id}/versions/${versionId}`, { method: "PATCH", body: JSON.stringify({ pinned }) }),
   deleteVersion: (id: number, versionId: number) =>
     request<{ project: Project }>(`/api/projects/${id}/versions/${versionId}`, { method: "DELETE" }),
   files: (id: number, path: string) => request<{ files: FileEntry[] }>(`/api/projects/${id}/files?path=${encodeURIComponent(path)}`),

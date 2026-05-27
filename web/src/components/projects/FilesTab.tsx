@@ -35,7 +35,7 @@ export function FilesTab({ app, project }: { app: ConsoleController; project: Pr
           {app.isPending("form:file") ? "处理中" : "上传/替换"}
         </Button>
       </form>
-      <div className="grid max-h-[520px] overflow-auto">
+      <div className="grid">
         {app.state.files.length ? app.state.files.map((file) => <FileRow app={app} file={file} key={file.path} />) : <p className="py-4 text-sm text-slate-500">空目录</p>}
       </div>
     </Panel>

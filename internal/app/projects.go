@@ -11,6 +11,8 @@ import (
 	"webshare/internal/security"
 )
 
+const maxAutoHistoryVersions = 10
+
 // handleProjects 分发项目相关 API。
 func (a *App) handleProjects(w http.ResponseWriter, r *http.Request, tail string) {
 	tail = strings.Trim(tail, "/")
@@ -374,6 +376,23 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request, project mod
 		writeJSON(w, http.StatusOK, map[string]any{"project": a.projectDTO(updated, r)})
 		return
 	}
+	if len(parts) == 1 && r.Method == http.MethodPatch {
+		versionID, ok := parseID(parts[0])
+		if !ok {
+			writeError(w, http.StatusBadRequest, "版本 ID 无效")
+			return
+		}
+		version, err := a.store.VersionByID(versionID)
+		if err != nil || version.ProjectID != project.ID {
+			if err == nil {
+				err = sql.ErrNoRows
+			}
+			notFoundOrError(w, err, "查询版本失败")
+			return
+		}
+		a.updateVersionPinned(w, r, version)
+		return
+	}
 	if len(parts) == 1 && r.Method == http.MethodDelete {
 		versionID, ok := parseID(parts[0])
 		if !ok {
@@ -392,6 +411,38 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request, project mod
 		return
 	}
 	writeError(w, http.StatusNotFound, "接口不存在")
+}
+
+// updateVersionPinned 更新版本固定状态，固定版本不会被自动清理。
+func (a *App) updateVersionPinned(w http.ResponseWriter, r *http.Request, version model.ProjectVersion) {
+	var req struct {
+		Pinned bool `json:"pinned"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "请求格式错误")
+		return
+	}
+	updated, err := a.store.UpdateVersionPinned(version.ID, req.Pinned)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "更新版本固定状态失败")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"version": updated})
+}
+
+// pruneProjectVersionHistory 自动删除超过保留数量的未固定历史版本。
+func (a *App) pruneProjectVersionHistory(project model.Project) error {
+	versions, err := a.store.AutoPruneVersions(project.ID, project.CurrentVersionID, maxAutoHistoryVersions)
+	if err != nil {
+		return err
+	}
+	for _, version := range versions {
+		if err := a.store.DeleteVersion(version.ID); err != nil {
+			return err
+		}
+		_ = a.files.DeleteVersionFiles(project.ID, version.ID)
+	}
+	return nil
 }
 
 // deleteVersion 删除版本元数据和文件，必要时把当前版本回退到最近的剩余版本。

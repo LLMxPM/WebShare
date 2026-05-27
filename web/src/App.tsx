@@ -37,12 +37,18 @@ export function App() {
   const projectMode = state.activeView === "projects";
 
   return (
-    <main className={projectMode ? "min-h-screen bg-slate-50 lg:grid lg:grid-cols-[220px_344px_minmax(0,1fr)]" : "min-h-screen bg-slate-50 lg:grid lg:grid-cols-[220px_minmax(0,1fr)]"}>
+    <main
+      className={
+        projectMode
+          ? "grid h-dvh grid-rows-[auto_minmax(180px,32dvh)_minmax(0,1fr)] overflow-hidden bg-slate-50 lg:grid-cols-[220px_344px_minmax(0,1fr)] lg:grid-rows-none"
+          : "grid h-dvh grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-slate-50 lg:grid-cols-[220px_minmax(0,1fr)] lg:grid-rows-none"
+      }
+    >
       <GlobalNav app={console} />
       {projectMode ? <ProjectColumn app={console} /> : null}
-      <section className="min-w-0 px-4 py-4 sm:px-5 lg:px-6">
-        {state.activeView === "users" ? <UsersView app={console} /> : null}
-        {state.activeView === "share" ? <ShareView app={console} /> : null}
+      <section className="min-h-0 min-w-0 overflow-hidden px-4 py-3 sm:px-5 lg:px-5">
+        {state.activeView === "users" ? <div className="h-full min-h-0 overflow-auto pr-1"><UsersView app={console} /></div> : null}
+        {state.activeView === "share" ? <div className="h-full min-h-0 overflow-auto pr-1"><ShareView app={console} /></div> : null}
         {state.activeView === "projects" ? <ProjectWorkspace app={console} /> : null}
       </section>
       {state.createModalOpen && projectMode ? <CreateProjectModal app={console} /> : null}

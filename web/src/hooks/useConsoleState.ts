@@ -28,6 +28,7 @@ interface ConsoleState {
   userSearch: string;
   userModal: UserModal | null;
   shareUrl: string;
+  shareKey: string;
   pendingKeys: string[];
 }
 
@@ -55,6 +56,7 @@ const initialState: ConsoleState = {
   userSearch: "",
   userModal: null,
   shareUrl: "",
+  shareKey: "",
   pendingKeys: [],
 };
 
@@ -185,7 +187,7 @@ export function useConsoleState() {
     toggleProjectTagFilter: (tag: string) => setState((current) => ({ projectTagFilters: toggleTag(current.projectTagFilters, tag) })),
     clearProjectTagFilters: () => setState({ projectTagFilters: [] }),
     setView: (activeView: ActiveView) => refreshAll({ activeView, createModalOpen: false, accountModalOpen: false, userModal: null }),
-    selectProject: (selectedId: number) => refreshSelected(selectedId, "").then(() => setState({ shareUrl: "", activeProjectTab: "overview" })),
+    selectProject: (selectedId: number) => refreshSelected(selectedId, "").then(() => setState({ shareUrl: "", shareKey: "", activeProjectTab: "overview" })),
     openPath: (filePath: string) => refreshSelected(stateRef.current.selectedId, filePath),
     login: (username: string, password: string) =>
       run("form:login", async () => {
@@ -231,8 +233,27 @@ export function useConsoleState() {
         const project = stateRef.current.projects.find((item) => item.id === stateRef.current.selectedId);
         if (!project) return false;
         const result = await api.shareKey(project.id);
-        await refreshAll({ shareUrl: result.shareUrl });
-        return "分享密钥已生成";
+        await refreshAll({ shareUrl: result.shareUrl, shareKey: result.key });
+        return "项目已加密，密钥链接已生成";
+      }),
+    disableShareKey: () =>
+      run("action:disable-share-key", async () => {
+        const project = stateRef.current.projects.find((item) => item.id === stateRef.current.selectedId);
+        if (!project) return false;
+        await api.updateProject(project.id, { shareState: "public" });
+        await refreshAll({ shareUrl: "", shareKey: "" });
+        return "项目已取消加密";
+      }),
+    copyShareKeyLink: () =>
+      run(`copy:share-key:${stateRef.current.selectedId || 0}`, async () => {
+        const project = stateRef.current.projects.find((item) => item.id === stateRef.current.selectedId);
+        if (!project) return false;
+        const cached = stateRef.current.shareUrl;
+        const result = cached ? { shareUrl: cached, key: stateRef.current.shareKey } : await api.shareKey(project.id);
+        const shareUrl = result.shareUrl;
+        await copyText(shareUrl);
+        await refreshAll({ shareUrl, shareKey: result.key });
+        return "密钥链接已复制";
       }),
     activateProject: () =>
       run("action:activate-project", async () => {
@@ -261,6 +282,15 @@ export function useConsoleState() {
         if (!project) return false;
         await api.activateVersion(project.id, versionId);
         await refreshAll({ activeProjectTab: "overview" });
+      }),
+    setVersionPinned: (versionId: number, pinned: boolean) =>
+      run(`version:pinned:${versionId}`, async () => {
+        const project = stateRef.current.projects.find((item) => item.id === stateRef.current.selectedId);
+        if (!project) return false;
+        await api.updateVersionPinned(project.id, versionId, pinned);
+        const { versions } = await api.versions(project.id);
+        setState({ versions: versions ?? [] });
+        return pinned ? "版本已固定" : "版本已取消固定";
       }),
     deleteVersion: (versionId: number) =>
       run(`version:delete:${versionId}`, async () => {

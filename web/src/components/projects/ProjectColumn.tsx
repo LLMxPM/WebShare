@@ -11,7 +11,7 @@ export function ProjectColumn({ app }: { app: ConsoleController }) {
   const { state, filteredProjects, availableProjectTags } = app;
 
   return (
-    <aside className="grid min-h-0 gap-4 border-b border-slate-200 bg-white p-4 lg:min-h-screen lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:border-b-0 lg:border-r">
+    <aside className="grid min-h-0 gap-3 border-b border-slate-200 bg-white p-3 lg:h-dvh lg:grid-rows-[auto_auto_minmax(0,1fr)] lg:border-b-0 lg:border-r lg:p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold text-slate-950">项目</h2>

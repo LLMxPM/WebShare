@@ -19,7 +19,7 @@ export function GlobalNav({ app }: { app: ConsoleController }) {
   }
 
   return (
-    <aside className="grid min-h-0 border-b border-slate-200 bg-white p-4 lg:min-h-screen lg:grid-rows-[auto_minmax(0,1fr)_auto] lg:border-b-0 lg:border-r">
+    <aside className="grid min-h-0 border-b border-slate-200 bg-white p-3 lg:h-dvh lg:grid-rows-[auto_minmax(0,1fr)_auto] lg:border-b-0 lg:border-r lg:p-4">
       <div className="mb-4">
         <img className="w-40" src={brandLogoURL} alt="WebShare" />
       </div>

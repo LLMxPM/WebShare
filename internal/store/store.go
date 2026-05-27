@@ -92,6 +92,7 @@ func (s *Store) migrate() error {
 			size_bytes INTEGER NOT NULL,
 			detected_base_url TEXT NOT NULL DEFAULT '',
 			warnings_json TEXT NOT NULL DEFAULT '[]',
+			pinned INTEGER NOT NULL DEFAULT 0,
 			created_by INTEGER NOT NULL REFERENCES users(id),
 			created_at TEXT NOT NULL,
 			UNIQUE(project_id, version_number)
@@ -114,6 +115,9 @@ func (s *Store) migrate() error {
 		return err
 	}
 	if err := s.addColumnIfMissing("projects", "tags_json", "TEXT NOT NULL DEFAULT '[]'"); err != nil {
+		return err
+	}
+	if err := s.addColumnIfMissing("project_versions", "pinned", "INTEGER NOT NULL DEFAULT 0"); err != nil {
 		return err
 	}
 	if _, err := s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email <> ''`); err != nil {
@@ -477,7 +481,7 @@ func (s *Store) NextVersionNumber(projectID int64) (int, error) {
 
 // VersionByID 根据版本 ID 查询版本。
 func (s *Store) VersionByID(id int64) (model.ProjectVersion, error) {
-	row := s.db.QueryRow(`SELECT id, project_id, version_number, source_type, storage_path, size_bytes, detected_base_url, warnings_json, created_by, created_at
+	row := s.db.QueryRow(`SELECT id, project_id, version_number, source_type, storage_path, size_bytes, detected_base_url, warnings_json, pinned, created_by, created_at
 		FROM project_versions WHERE id = ?`, id)
 	return scanVersion(row)
 }
@@ -492,7 +496,7 @@ func (s *Store) CurrentVersion(project model.Project) (model.ProjectVersion, err
 
 // ListVersions 返回项目全部历史版本。
 func (s *Store) ListVersions(projectID int64) ([]model.ProjectVersion, error) {
-	rows, err := s.db.Query(`SELECT id, project_id, version_number, source_type, storage_path, size_bytes, detected_base_url, warnings_json, created_by, created_at
+	rows, err := s.db.Query(`SELECT id, project_id, version_number, source_type, storage_path, size_bytes, detected_base_url, warnings_json, pinned, created_by, created_at
 		FROM project_versions WHERE project_id = ? ORDER BY version_number DESC`, projectID)
 	if err != nil {
 		return nil, err
@@ -511,9 +515,55 @@ func (s *Store) ListVersions(projectID int64) ([]model.ProjectVersion, error) {
 
 // LatestVersionExcept 返回排除指定版本后的最新版本。
 func (s *Store) LatestVersionExcept(projectID, excludeVersionID int64) (model.ProjectVersion, error) {
-	row := s.db.QueryRow(`SELECT id, project_id, version_number, source_type, storage_path, size_bytes, detected_base_url, warnings_json, created_by, created_at
+	row := s.db.QueryRow(`SELECT id, project_id, version_number, source_type, storage_path, size_bytes, detected_base_url, warnings_json, pinned, created_by, created_at
 		FROM project_versions WHERE project_id = ? AND id <> ? ORDER BY version_number DESC LIMIT 1`, projectID, excludeVersionID)
 	return scanVersion(row)
+}
+
+// AutoPruneVersions 返回应自动清理的未固定历史版本，固定版本和当前版本不计入保留数量。
+func (s *Store) AutoPruneVersions(projectID, currentVersionID int64, keepHistory int) ([]model.ProjectVersion, error) {
+	rows, err := s.db.Query(`SELECT id, project_id, version_number, source_type, storage_path, size_bytes, detected_base_url, warnings_json, pinned, created_by, created_at
+		FROM project_versions
+		WHERE project_id = ? AND pinned = 0 AND id <> ?
+		ORDER BY created_at DESC, id DESC`, projectID, currentVersionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	versions := make([]model.ProjectVersion, 0)
+	for rows.Next() {
+		version, err := scanVersion(rows)
+		if err != nil {
+			return nil, err
+		}
+		versions = append(versions, version)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if keepHistory < 0 {
+		keepHistory = 0
+	}
+	if len(versions) <= keepHistory {
+		return []model.ProjectVersion{}, nil
+	}
+	return versions[keepHistory:], nil
+}
+
+// UpdateVersionPinned 更新版本固定状态，固定版本不会被自动清理。
+func (s *Store) UpdateVersionPinned(id int64, pinned bool) (model.ProjectVersion, error) {
+	res, err := s.db.Exec(`UPDATE project_versions SET pinned = ? WHERE id = ?`, boolInt(pinned), id)
+	if err != nil {
+		return model.ProjectVersion{}, err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return model.ProjectVersion{}, err
+	}
+	if affected == 0 {
+		return model.ProjectVersion{}, ErrNotFound
+	}
+	return s.VersionByID(id)
 }
 
 // ActivateVersion 将指定版本设为项目当前版本。
@@ -600,16 +650,18 @@ func projectTagsJSON(tags []string) string {
 func scanVersion(row rowScanner) (model.ProjectVersion, error) {
 	var version model.ProjectVersion
 	var warningsJSON string
+	var pinned int
 	var created string
 	if err := row.Scan(&version.ID, &version.ProjectID, &version.VersionNumber, &version.SourceType,
 		&version.StoragePath, &version.SizeBytes, &version.DetectedBaseURL, &warningsJSON,
-		&version.CreatedBy, &created); err != nil {
+		&pinned, &version.CreatedBy, &created); err != nil {
 		return model.ProjectVersion{}, err
 	}
 	_ = json.Unmarshal([]byte(warningsJSON), &version.Warnings)
 	if version.Warnings == nil {
 		version.Warnings = []string{}
 	}
+	version.Pinned = pinned != 0
 	version.CreatedAt = parseTime(created)
 	return version, nil
 }

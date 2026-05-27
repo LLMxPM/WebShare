@@ -64,6 +64,7 @@ type ProjectVersion struct {
 	SizeBytes       int64     `json:"sizeBytes"`
 	DetectedBaseURL string    `json:"detectedBaseUrl"`
 	Warnings        []string  `json:"warnings"`
+	Pinned          bool      `json:"pinned"`
 	CreatedBy       int64     `json:"createdBy"`
 	CreatedAt       time.Time `json:"createdAt"`
 }

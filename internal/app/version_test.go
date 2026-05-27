@@ -2,6 +2,7 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -55,6 +56,59 @@ func TestDeleteCurrentVersionFallsBackAndClearsLast(t *testing.T) {
 	}
 }
 
+// TestAutoPruneKeepsPinnedVersions 验证自动清理只删除超过数量的未固定历史版本。
+func TestAutoPruneKeepsPinnedVersions(t *testing.T) {
+	app := newPublishTestApp(t)
+	defer app.store.Close()
+	project := createPublishTestProject(t, app, "prune-version")
+
+	versions := make([]model.ProjectVersion, 0, 13)
+	for i := 1; i <= 13; i++ {
+		versions = append(versions, createVersionForDeleteTest(t, app, project, fmt.Sprintf("version-%02d", i), "/"))
+	}
+	pinVersionForTest(t, app, project, versions[0].ID, true)
+	project.CurrentVersionID = versions[len(versions)-1].ID
+	project.DetectedBaseURL = versions[len(versions)-1].DetectedBaseURL
+	var err error
+	project, err = app.store.UpdateProjectSettings(project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := app.pruneProjectVersionHistory(project); err != nil {
+		t.Fatal(err)
+	}
+
+	remaining, err := app.store.ListVersions(project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 12 {
+		t.Fatalf("剩余版本数 = %d, want 12", len(remaining))
+	}
+	pinned, err := app.store.VersionByID(versions[0].ID)
+	if err != nil {
+		t.Fatalf("固定版本被误删: %v", err)
+	}
+	if !pinned.Pinned {
+		t.Fatal("expected oldest version to stay pinned")
+	}
+	if _, err := app.store.VersionByID(versions[1].ID); err == nil {
+		t.Fatal("expected oldest unpinned history version to be pruned")
+	}
+	if _, err := os.Stat(versions[1].StoragePath); !os.IsNotExist(err) {
+		t.Fatalf("自动删除版本目录后 stat err = %v, want not exist", err)
+	}
+	unpinnedHistory := 0
+	for _, version := range remaining {
+		if version.ID != project.CurrentVersionID && !version.Pinned {
+			unpinnedHistory++
+		}
+	}
+	if unpinnedHistory != maxAutoHistoryVersions {
+		t.Fatalf("未固定历史版本数 = %d, want %d", unpinnedHistory, maxAutoHistoryVersions)
+	}
+}
+
 // createVersionForDeleteTest 创建带 index.html 的测试版本。
 func createVersionForDeleteTest(t *testing.T, app *App, project model.Project, body string, baseURL string) model.ProjectVersion {
 	t.Helper()
@@ -84,5 +138,17 @@ func deleteVersionForTest(t *testing.T, app *App, project model.Project, version
 	app.handleVersions(recorder, request, project, []string{fmt.Sprint(versionID)})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("删除版本状态码 = %d, want %d, body %s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+}
+
+// pinVersionForTest 通过版本 API 设置固定状态。
+func pinVersionForTest(t *testing.T, app *App, project model.Project, versionID int64, pinned bool) {
+	t.Helper()
+	body := []byte(fmt.Sprintf(`{"pinned":%t}`, pinned))
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/projects/%d/versions/%d", project.ID, versionID), bytes.NewReader(body))
+	app.handleVersions(recorder, request, project, []string{fmt.Sprint(versionID)})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("固定版本状态码 = %d, want %d, body %s", recorder.Code, http.StatusOK, recorder.Body.String())
 	}
 }

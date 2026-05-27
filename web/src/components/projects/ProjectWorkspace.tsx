@@ -14,7 +14,7 @@ export function ProjectWorkspace({ app }: { app: ConsoleController }) {
   const project = app.selectedProject;
   if (!project) {
     return (
-      <section className="grid min-h-80 place-items-center rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
+      <section className="grid h-full min-h-0 place-items-center rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
         <div className="grid gap-2">
           <h2 className="text-xl font-bold text-slate-950">还没有项目</h2>
           <p className="text-sm text-slate-500">在中栏创建项目后，上传 ZIP、文件夹或 HTML 即可获得访问地址。</p>
@@ -24,15 +24,17 @@ export function ProjectWorkspace({ app }: { app: ConsoleController }) {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid h-full min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3">
       <ProjectHero app={app} project={project} />
       <ProjectTabs app={app} project={project} />
-      {app.state.activeProjectTab === "overview" ? <OverviewTab app={app} project={project} /> : null}
-      {app.state.activeProjectTab === "publish" ? <PublishTab app={app} project={project} /> : null}
-      {app.state.activeProjectTab === "files" ? <FilesTab app={app} project={project} /> : null}
-      {app.state.activeProjectTab === "versions" ? <VersionsTab app={app} project={project} /> : null}
-      {app.state.activeProjectTab === "settings" ? <SettingsTab app={app} project={project} /> : null}
-      {!project.currentVersionId && app.state.activeProjectTab === "files" ? <EmptyInline>当前项目还没有版本，发布后才能管理文件。</EmptyInline> : null}
+      <div className="min-h-0 overflow-auto pr-1">
+        {app.state.activeProjectTab === "overview" ? <OverviewTab app={app} project={project} /> : null}
+        {app.state.activeProjectTab === "publish" ? <PublishTab app={app} project={project} /> : null}
+        {app.state.activeProjectTab === "files" ? <FilesTab app={app} project={project} /> : null}
+        {app.state.activeProjectTab === "versions" ? <VersionsTab app={app} project={project} /> : null}
+        {app.state.activeProjectTab === "settings" ? <SettingsTab app={app} project={project} /> : null}
+        {!project.currentVersionId && app.state.activeProjectTab === "files" ? <EmptyInline>当前项目还没有版本，发布后才能管理文件。</EmptyInline> : null}
+      </div>
     </div>
   );
 }

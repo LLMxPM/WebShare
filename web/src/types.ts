@@ -42,6 +42,7 @@ export interface ProjectVersion {
   sizeBytes: number;
   detectedBaseUrl: string;
   warnings: string[] | null;
+  pinned: boolean;
   createdBy: number;
   createdAt: string;
 }

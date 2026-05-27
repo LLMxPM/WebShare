@@ -113,3 +113,51 @@ func TestMigrateAddsProjectTagsDefault(t *testing.T) {
 		t.Fatalf("expected migrated project tags to be empty, got %v", project.Tags)
 	}
 }
+
+// TestMigrateAddsVersionPinnedDefault 验证旧库版本迁移后默认不固定。
+func TestMigrateAddsVersionPinnedDefault(t *testing.T) {
+	dataDir := t.TempDir()
+	dbPath := filepath.Join(dataDir, "webshare.db")
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(dbPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339Nano)
+	_, err = db.Exec(`CREATE TABLE project_versions (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		project_id INTEGER NOT NULL,
+		version_number INTEGER NOT NULL,
+		source_type TEXT NOT NULL,
+		storage_path TEXT NOT NULL,
+		size_bytes INTEGER NOT NULL,
+		detected_base_url TEXT NOT NULL DEFAULT '',
+		warnings_json TEXT NOT NULL DEFAULT '[]',
+		created_by INTEGER NOT NULL,
+		created_at TEXT NOT NULL,
+		UNIQUE(project_id, version_number)
+	)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO project_versions(project_id, version_number, source_type, storage_path, size_bytes, created_by, created_at)
+		VALUES(1, 1, 'html', 'p/1/v/1', 128, 1, ?)`, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := Open(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	version, err := store.VersionByID(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version.Pinned {
+		t.Fatal("expected migrated version to be unpinned by default")
+	}
+}

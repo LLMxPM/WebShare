@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -129,6 +130,9 @@ func (a *App) createPublishedVersion(project model.Project, userID int64, source
 		return project, version, err
 	}
 	_ = a.syncProjectRuntime(project)
+	if err := a.pruneProjectVersionHistory(project); err != nil {
+		log.Printf("自动清理历史版本失败: project=%d err=%v", project.ID, err)
+	}
 	return project, version, nil
 }
 
@@ -230,6 +234,9 @@ func (a *App) updateFileVersion(w http.ResponseWriter, r *http.Request, project 
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "激活版本失败")
 		return
+	}
+	if err := a.pruneProjectVersionHistory(project); err != nil {
+		log.Printf("自动清理历史版本失败: project=%d err=%v", project.ID, err)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"project": a.projectDTO(project, r), "version": version})
 }
