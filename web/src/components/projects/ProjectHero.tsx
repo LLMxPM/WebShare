@@ -1,11 +1,11 @@
 // 文件功能描述：渲染项目顶部状态、访问地址、快捷操作、二维码和概要字段。
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { Copy, Download, KeyRound, Play, Power, QrCode, Upload } from "lucide-react";
 import { api } from "../../api";
 import type { ConsoleController } from "../../hooks/useConsoleState";
 import type { Project } from "../../types";
-import { Button, LinkButton, Modal, Pill, TagList } from "../../ui";
+import { Button, LinkButton, Modal, TagList } from "../../ui";
 import { accessModeLabel, activeStateLabel, shareStateLabel } from "../../utils/format";
 
 // ProjectHero 展示项目核心信息和最常用操作。
@@ -23,18 +23,16 @@ export function ProjectHero({ app, project }: { app: ConsoleController; project:
   return (
     <section className="relative grid gap-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm xl:grid-cols-[minmax(0,1fr)_auto]">
       <div className="min-w-0">
-        <div className="mb-2 flex flex-wrap gap-1.5">
-          <Pill tone={project.active ? "green" : "red"}>{activeStateLabel(project.active)}</Pill>
-          <Pill>{accessModeLabel(project.accessMode)}</Pill>
-          <Pill tone={shareTone}>{shareStateLabel(project.shareState)}</Pill>
-          <Pill>{project.spaEnabled ? "SPA fallback" : "普通静态"}</Pill>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <h1 className="min-w-0 break-words text-xl font-bold leading-tight text-slate-950">{project.name}</h1>
+        <div className="mb-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h1 className="min-w-0 break-words text-2xl font-bold leading-tight text-slate-950">{project.name}</h1>
           <code className="min-w-0 break-words rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">{project.slug}</code>
-        </div>
-        <div className="mt-2">
           <TagList tags={project.tags} />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <StatusBadge tone={project.active ? "green" : "red"}>{activeStateLabel(project.active)}</StatusBadge>
+          <StatusBadge tone={shareTone}>{shareStateLabel(project.shareState)}</StatusBadge>
+          <StatusBadge>{accessModeLabel(project.accessMode)}</StatusBadge>
+          <StatusBadge>{project.spaEnabled ? "SPA fallback" : "普通静态"}</StatusBadge>
         </div>
       </div>
       <div className="flex flex-wrap items-start gap-1.5 xl:justify-end">
@@ -81,6 +79,18 @@ export function ProjectHero({ app, project }: { app: ConsoleController; project:
   );
 }
 
+// StatusBadge 渲染项目详情头部状态，使用矩形样式与项目标签区分。
+function StatusBadge({ children, tone = "slate" }: { children: ReactNode; tone?: "slate" | "green" | "red" | "violet" | "amber" }) {
+  const toneClass = {
+    slate: "border-slate-300 bg-white text-slate-700 shadow-slate-200/60",
+    green: "border-emerald-300 bg-white text-emerald-700 shadow-emerald-100",
+    red: "border-red-300 bg-white text-red-700 shadow-red-100",
+    violet: "border-violet-300 bg-white text-violet-700 shadow-violet-100",
+    amber: "border-amber-300 bg-white text-amber-700 shadow-amber-100",
+  }[tone];
+  return <span className={`inline-flex min-h-6 items-center rounded-md border px-2 py-0.5 text-xs font-black shadow-sm ${toneClass}`}>{children}</span>;
+}
+
 // AccessStrip 渲染项目访问地址或密钥链接。
 function AccessStrip({
   app,
@@ -101,8 +111,8 @@ function AccessStrip({
 }) {
   const stripClass =
     tone === "violet"
-      ? "grid gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 md:grid-cols-[84px_minmax(0,1fr)_auto] xl:col-span-2"
-      : "grid gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 md:grid-cols-[84px_minmax(0,1fr)_auto] xl:col-span-2";
+      ? "grid items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 md:grid-cols-[84px_minmax(0,1fr)_auto] xl:col-span-2"
+      : "grid items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 md:grid-cols-[84px_minmax(0,1fr)_auto] xl:col-span-2";
   const linkClass = tone === "violet" ? "min-w-0 break-words text-sm font-medium text-violet-700" : "min-w-0 break-words text-sm font-medium text-teal-700";
 
   return (
@@ -115,7 +125,7 @@ function AccessStrip({
       ) : (
         <code className="min-w-0 break-words text-sm text-slate-700">{value}</code>
       )}
-      <div className="flex flex-wrap gap-1.5 md:justify-end">
+      <div className="flex flex-wrap items-center gap-1.5 md:justify-end">
         {encrypted ? (
           <>
             <div className="inline-flex min-h-8 items-center rounded-md border border-violet-200 bg-white px-2.5 py-1 text-xs font-black text-violet-700">
