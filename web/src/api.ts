@@ -106,6 +106,8 @@ export const api = {
   versions: (id: number) => request<{ versions: ProjectVersion[] }>(`/api/projects/${id}/versions`),
   activateVersion: (id: number, versionId: number) =>
     request<{ project: Project }>(`/api/projects/${id}/versions/${versionId}/activate`, { method: "POST" }),
+  deleteVersion: (id: number, versionId: number) =>
+    request<{ project: Project }>(`/api/projects/${id}/versions/${versionId}`, { method: "DELETE" }),
   files: (id: number, path: string) => request<{ files: FileEntry[] }>(`/api/projects/${id}/files?path=${encodeURIComponent(path)}`),
   putFile: (id: number, path: string, file: File) =>
     fetch(`/api/projects/${id}/files?path=${encodeURIComponent(path)}`, {

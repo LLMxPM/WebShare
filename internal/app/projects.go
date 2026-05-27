@@ -374,5 +374,59 @@ func (a *App) handleVersions(w http.ResponseWriter, r *http.Request, project mod
 		writeJSON(w, http.StatusOK, map[string]any{"project": a.projectDTO(updated, r)})
 		return
 	}
+	if len(parts) == 1 && r.Method == http.MethodDelete {
+		versionID, ok := parseID(parts[0])
+		if !ok {
+			writeError(w, http.StatusBadRequest, "版本 ID 无效")
+			return
+		}
+		version, err := a.store.VersionByID(versionID)
+		if err != nil || version.ProjectID != project.ID {
+			if err == nil {
+				err = sql.ErrNoRows
+			}
+			notFoundOrError(w, err, "查询版本失败")
+			return
+		}
+		a.deleteVersion(w, r, project, version)
+		return
+	}
 	writeError(w, http.StatusNotFound, "接口不存在")
+}
+
+// deleteVersion 删除版本元数据和文件，必要时把当前版本回退到最近的剩余版本。
+func (a *App) deleteVersion(w http.ResponseWriter, r *http.Request, project model.Project, version model.ProjectVersion) {
+	updated := project
+	if project.CurrentVersionID == version.ID {
+		next, err := a.store.LatestVersionExcept(project.ID, version.ID)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			writeError(w, http.StatusInternalServerError, "查询可回退版本失败")
+			return
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			updated.CurrentVersionID = 0
+			updated.DetectedBaseURL = ""
+		} else {
+			updated.CurrentVersionID = next.ID
+			updated.DetectedBaseURL = next.DetectedBaseURL
+		}
+		var updateErr error
+		updated, updateErr = a.store.UpdateProjectSettings(updated)
+		if updateErr != nil {
+			writeError(w, http.StatusInternalServerError, "更新当前版本失败")
+			return
+		}
+	}
+	if err := a.store.DeleteVersion(version.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "删除版本失败")
+		return
+	}
+	_ = a.files.DeleteVersionFiles(project.ID, version.ID)
+	if project.CurrentVersionID == version.ID {
+		if err := a.syncProjectRuntime(updated); err != nil {
+			writeError(w, http.StatusBadRequest, "应用项目运行状态失败: "+err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"project": a.projectDTO(updated, r)})
 }

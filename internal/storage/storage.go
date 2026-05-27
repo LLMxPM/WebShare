@@ -45,6 +45,11 @@ func (m Manager) DeleteProjectFiles(projectID int64) error {
 	return os.RemoveAll(filepath.Join(m.DataDir, "projects", fmt.Sprintf("%d", projectID)))
 }
 
+// DeleteVersionFiles 删除指定项目版本的文件目录。
+func (m Manager) DeleteVersionFiles(projectID, versionID int64) error {
+	return os.RemoveAll(m.VersionPath(projectID, versionID))
+}
+
 // ExtractZIP 将 ZIP 内容安全解压到目标目录，并在需要时扁平化单层根目录。
 func ExtractZIP(src io.ReaderAt, size int64, dest string) error {
 	reader, err := zip.NewReader(src, size)

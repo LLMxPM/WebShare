@@ -509,11 +509,34 @@ func (s *Store) ListVersions(projectID int64) ([]model.ProjectVersion, error) {
 	return versions, rows.Err()
 }
 
+// LatestVersionExcept 返回排除指定版本后的最新版本。
+func (s *Store) LatestVersionExcept(projectID, excludeVersionID int64) (model.ProjectVersion, error) {
+	row := s.db.QueryRow(`SELECT id, project_id, version_number, source_type, storage_path, size_bytes, detected_base_url, warnings_json, created_by, created_at
+		FROM project_versions WHERE project_id = ? AND id <> ? ORDER BY version_number DESC LIMIT 1`, projectID, excludeVersionID)
+	return scanVersion(row)
+}
+
 // ActivateVersion 将指定版本设为项目当前版本。
 func (s *Store) ActivateVersion(project model.Project, version model.ProjectVersion) (model.Project, error) {
 	project.CurrentVersionID = version.ID
 	project.DetectedBaseURL = version.DetectedBaseURL
 	return s.UpdateProjectSettings(project)
+}
+
+// DeleteVersion 删除指定版本元数据。
+func (s *Store) DeleteVersion(id int64) error {
+	res, err := s.db.Exec(`DELETE FROM project_versions WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // projectSelectSQL 返回项目查询的基础 SELECT 语句。
