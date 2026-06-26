@@ -2,6 +2,8 @@
 import type { PublishKind, UploadSelection } from "../appTypes";
 import { formatSize, selectedFolderName } from "./format";
 
+export const maxFolderUploadFiles = 900;
+
 // uploadSummary 根据文件选择状态生成上传卡片的中文摘要。
 export function uploadSummary(kind: PublishKind, files: FileList | null | undefined, createMode = false) {
   const items = Array.from(files ?? []);
@@ -9,7 +11,8 @@ export function uploadSummary(kind: PublishKind, files: FileList | null | undefi
   const pendingLabel = createMode ? "将随创建发布" : "待上传";
   if (kind !== "folder") return `${items[0].name} · ${formatSize(items[0].size)} · ${pendingLabel}`;
   const total = items.reduce((sum, file) => sum + file.size, 0);
-  return `${selectedFolderName(items)} · ${items.length} 个文件 · ${formatSize(total)} · ${pendingLabel}`;
+  const warning = items.length > maxFolderUploadFiles ? " · 文件数过多，建议 ZIP" : "";
+  return `${selectedFolderName(items)} · ${items.length} 个文件 · ${formatSize(total)} · ${pendingLabel}${warning}`;
 }
 
 // readUploadSelection 从指定 input 中读取 API 上传需要的文件对象。
@@ -17,6 +20,9 @@ export function readUploadSelection(kind: PublishKind, input: HTMLInputElement |
   if (kind === "folder") {
     const files = input?.files;
     if (!files?.length) return null;
+    if (files.length > maxFolderUploadFiles) {
+      throw new Error(`文件夹包含 ${files.length} 个文件，当前最多支持 ${maxFolderUploadFiles} 个；请先打包 ZIP 后上传`);
+    }
     return { kind, files };
   }
   const file = input?.files?.[0];

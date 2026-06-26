@@ -1,9 +1,10 @@
 // 文件功能描述：渲染创建项目弹窗，并支持创建时选择首个发布内容。
 import { FormEvent, useRef, useState } from "react";
 import { FileArchive, FileCode2, FolderOpen, Plus } from "lucide-react";
-import type { PublishKind, UploadSelection } from "../../appTypes";
+import type { PublishKind, UploadProgress, UploadSelection } from "../../appTypes";
 import type { ConsoleController } from "../../hooks/useConsoleState";
 import { Button, Modal, inputClass, labelClass } from "../../ui";
+import { formatSize } from "../../utils/format";
 import { emptyUploadSummaries, readUploadSelection, uploadSummary } from "../../utils/uploads";
 import { parseTagsInput } from "../../utils/format";
 import { TagPicker } from "./TagPicker";
@@ -13,6 +14,8 @@ export function CreateProjectModal({ app }: { app: ConsoleController }) {
   const refs = useRef<Record<PublishKind, HTMLInputElement | null>>({ zip: null, folder: null, html: null });
   const [summaries, setSummaries] = useState(emptyUploadSummaries);
   const [tagsValue, setTagsValue] = useState("");
+  const progress = app.state.uploadProgress["form:project"];
+  const pending = app.isPending("form:project");
 
   // handleFileChange 更新摘要，并保证创建时 ZIP、文件夹和 HTML 只选择一种。
   function handleFileChange(kind: PublishKind, input: HTMLInputElement) {
@@ -36,7 +39,7 @@ export function CreateProjectModal({ app }: { app: ConsoleController }) {
   }
 
   return (
-    <Modal eyebrow="新建项目" title="创建并发布" onClose={app.closeCreateModal} wide>
+    <Modal eyebrow="新建项目" title="创建并发布" onClose={pending ? () => undefined : app.closeCreateModal} wide>
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <label className={labelClass}>
           项目名称
@@ -59,13 +62,14 @@ export function CreateProjectModal({ app }: { app: ConsoleController }) {
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="button" onClick={app.closeCreateModal}>
+          <Button type="button" onClick={app.closeCreateModal} disabled={pending}>
             取消
           </Button>
-          <Button variant="primary" icon={Plus} type="submit" disabled={app.isPending("form:project")}>
-            {app.isPending("form:project") ? "处理中" : "创建项目"}
+          <Button variant="primary" icon={Plus} type="submit" disabled={pending}>
+            {pending ? createButtonText(progress) : "创建项目"}
           </Button>
         </div>
+        {pending ? <CreateUploadProgress progress={progress} /> : null}
       </form>
     </Modal>
   );
@@ -108,4 +112,24 @@ function UploadChoice({ kind, icon: Icon, title, description, summary, refs, onC
 // selectedUpload 返回新建项目弹窗中当前选择的上传内容。
 function selectedUpload(refs: Record<PublishKind, HTMLInputElement | null>): UploadSelection | null {
   return readUploadSelection("zip", refs.zip, true) ?? readUploadSelection("folder", refs.folder, true) ?? readUploadSelection("html", refs.html, true);
+}
+
+// CreateUploadProgress 展示创建项目时首个版本的上传进度。
+function CreateUploadProgress({ progress }: { progress?: UploadProgress }) {
+  const width = progress?.percent ?? 8;
+  const text = progress ? (progress.total > 0 ? `${progress.percent}% · ${formatSize(progress.loaded)} / ${formatSize(progress.total)}` : `已上传 ${formatSize(progress.loaded)}`) : "正在创建项目...";
+  return (
+    <div className="grid gap-1 rounded-lg bg-slate-50 px-3 py-2">
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${width}%` }} />
+      </div>
+      <span className="text-xs font-bold text-slate-500">{text}</span>
+    </div>
+  );
+}
+
+// createButtonText 返回创建按钮在进行中的文案。
+function createButtonText(progress?: UploadProgress) {
+  if (!progress) return "处理中";
+  return progress.percent === null ? "上传中" : `上传中 ${progress.percent}%`;
 }

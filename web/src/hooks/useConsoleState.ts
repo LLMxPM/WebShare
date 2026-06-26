@@ -1,7 +1,7 @@
 // 文件功能描述：集中管理管理后台登录态、项目、用户、分享地址和异步操作状态。
 import { useCallback, useMemo, useReducer, useRef } from "react";
 import { api } from "../api";
-import type { AccountModalFocus, ActiveView, ProjectTab, ShareFilter, UploadSelection, UserModal } from "../appTypes";
+import type { AccountModalFocus, ActiveView, ProjectTab, ShareFilter, UploadProgress, UploadSelection, UserModal } from "../appTypes";
 import type { FileEntry, NetworkSettings, Project, ProjectVersion, PublicHostInfo, User } from "../types";
 import { useToast, type ToastType } from "../toast";
 import { collectProjectTags, copyText, filterProjects, filterUsers, publishUpload, toggleTag } from "./consoleHelpers";
@@ -30,6 +30,7 @@ interface ConsoleState {
   shareUrl: string;
   shareKey: string;
   pendingKeys: string[];
+  uploadProgress: Record<string, UploadProgress>;
 }
 
 type StatePatch = Partial<ConsoleState> | ((state: ConsoleState) => Partial<ConsoleState>);
@@ -58,6 +59,7 @@ const initialState: ConsoleState = {
   shareUrl: "",
   shareKey: "",
   pendingKeys: [],
+  uploadProgress: {},
 };
 
 // reducer 用部分更新模拟集中状态层，避免组件分散维护业务状态。
@@ -81,6 +83,15 @@ export function useConsoleState() {
   const filteredUsers = useMemo(() => filterUsers(state.users, state.userSearch), [state.users, state.userSearch]);
 
   const isPending = useCallback((key: string) => stateRef.current.pendingKeys.includes(key), []);
+
+  // setUploadProgress 记录指定上传任务的浏览器发送进度。
+  const setUploadProgress = useCallback(
+    (key: string, progress: UploadProgress) =>
+      setState((current) => ({
+        uploadProgress: { ...current.uploadProgress, [key]: progress },
+      })),
+    [setState],
+  );
 
   const loadSelectedData = useCallback(async (projects: Project[], selectedId: number | null, filePath: string) => {
     const project = projects.find((item) => item.id === selectedId);
@@ -140,7 +151,11 @@ export function useConsoleState() {
         toastType = "error";
         toastMessage = error instanceof Error ? error.message : "操作失败";
       } finally {
-        setState((current) => ({ pendingKeys: current.pendingKeys.filter((item) => item !== key) }));
+        setState((current) => {
+          const uploadProgress = { ...current.uploadProgress };
+          delete uploadProgress[key];
+          return { pendingKeys: current.pendingKeys.filter((item) => item !== key), uploadProgress };
+        });
       }
       if (toastMessage) showToast(toastMessage, toastType);
     },
@@ -202,9 +217,11 @@ export function useConsoleState() {
     createProject: (name: string, tags: string[], upload: UploadSelection | null) =>
       run("form:project", async () => {
         const { project } = await api.createProject({ name, tags });
-        await refreshAll({ selectedId: project.id, activeProjectTab: "overview", createModalOpen: false });
-        if (upload) await publishUpload(project.id, upload);
-        if (upload) await refreshAll({ selectedId: project.id, activeProjectTab: "overview", createModalOpen: false });
+        await refreshAll({ selectedId: project.id, activeProjectTab: "overview", createModalOpen: !!upload });
+        if (upload) {
+          await publishUpload(project.id, upload, (progress) => setUploadProgress("form:project", progress));
+          await refreshAll({ selectedId: project.id, activeProjectTab: "overview", createModalOpen: false });
+        }
       }),
     saveSettings: (payload: Record<string, unknown>) =>
       run("form:settings", async () => {
@@ -213,13 +230,15 @@ export function useConsoleState() {
         await api.updateProject(project.id, payload);
         await refreshAll({ activeProjectTab: "overview" });
       }),
-    publishProject: (upload: UploadSelection) =>
-      run(`publish:${stateRef.current.selectedId || 0}:${upload.kind}`, async () => {
+    publishProject: (upload: UploadSelection) => {
+      const key = `publish:${stateRef.current.selectedId || 0}:${upload.kind}`;
+      return run(key, async () => {
         const project = stateRef.current.projects.find((item) => item.id === stateRef.current.selectedId);
         if (!project) return false;
-        await publishUpload(project.id, upload);
+        await publishUpload(project.id, upload, (progress) => setUploadProgress(key, progress));
         await refreshAll({ activeProjectTab: "overview" });
-      }),
+      });
+    },
     uploadManagedFile: (path: string, file: File) =>
       run("form:file", async () => {
         const project = stateRef.current.projects.find((item) => item.id === stateRef.current.selectedId);

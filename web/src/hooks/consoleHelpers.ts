@@ -1,6 +1,6 @@
 // 文件功能描述：提供管理后台状态 hook 复用的筛选、标签切换、上传发布和复制工具。
 import { api } from "../api";
-import type { ShareFilter, UploadSelection } from "../appTypes";
+import type { ShareFilter, UploadProgress, UploadSelection } from "../appTypes";
 import type { Project, User } from "../types";
 import { roleLabel } from "../utils/format";
 
@@ -54,16 +54,16 @@ export function toggleTag(tags: string[], tag: string) {
   return tags.some((item) => item.toLowerCase() === key) ? tags.filter((item) => item.toLowerCase() !== key) : [...tags, value];
 }
 
-// publishUpload 按上传类型调用对应 API。
-export async function publishUpload(projectId: number, upload: UploadSelection) {
+// publishUpload 按上传类型调用对应 API，并把浏览器上传进度回传给状态层。
+export async function publishUpload(projectId: number, upload: UploadSelection, onProgress?: (progress: UploadProgress) => void) {
   if (upload.kind === "folder") {
     if (!upload.files?.length) throw new Error("请选择文件夹");
-    await api.publishFolder(projectId, upload.files);
+    await api.publishFolder(projectId, upload.files, onProgress);
     return;
   }
   if (!upload.file) throw new Error("请选择文件");
-  if (upload.kind === "zip") await api.publishZip(projectId, upload.file);
-  else await api.publishHtml(projectId, upload.file);
+  if (upload.kind === "zip") await api.publishZip(projectId, upload.file, onProgress);
+  else await api.publishHtml(projectId, upload.file, onProgress);
 }
 
 // copyText 将访问地址复制到剪贴板，必要时使用旧式复制降级。

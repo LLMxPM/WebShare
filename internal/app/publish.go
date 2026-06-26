@@ -260,10 +260,22 @@ func (a *App) downloadFile(w http.ResponseWriter, r *http.Request, root, project
 func readUploadFile(r *http.Request, limit int64) (multipart.File, *multipart.FileHeader, error) {
 	r.Body = http.MaxBytesReader(nil, r.Body, limit)
 	if err := r.ParseMultipartForm(limit); err != nil {
-		return nil, nil, err
+		return nil, nil, uploadParseError(limit, err)
 	}
 	file, header, err := r.FormFile("file")
 	return file, header, err
+}
+
+// uploadParseError 将 Go multipart 底层错误转换为用户可理解的中文提示。
+func uploadParseError(limit int64, err error) error {
+	message := err.Error()
+	if strings.Contains(message, "http: request body too large") {
+		return fmt.Errorf("上传内容超过限制，当前最大 %d MB", limit/1024/1024)
+	}
+	if strings.Contains(message, "multipart: message too large") {
+		return errors.New("上传文件数量过多或表单内容过大，请改用 ZIP 上传或减少文件数量")
+	}
+	return err
 }
 
 // folderUploadManifest 描述文件夹上传中的文件字段和项目内相对路径。
@@ -282,7 +294,7 @@ type folderUploadFile struct {
 func readFolderUpload(r *http.Request, limit int64) (folderUploadManifest, map[string][]*multipart.FileHeader, func(), error) {
 	r.Body = http.MaxBytesReader(nil, r.Body, limit)
 	if err := r.ParseMultipartForm(limit); err != nil {
-		return folderUploadManifest{}, nil, nil, err
+		return folderUploadManifest{}, nil, nil, uploadParseError(limit, err)
 	}
 	cleanup := func() {
 		if r.MultipartForm != nil {

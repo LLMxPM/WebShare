@@ -108,7 +108,7 @@ export function Modal({ title, eyebrow, onClose, children, wide = false }: { tit
     <div className="fixed inset-0 z-40 grid place-items-center bg-slate-950/45 p-5" role="presentation">
       <section
         className={classNames(
-          "grid max-h-[calc(100vh-40px)] w-full gap-4 overflow-auto rounded-lg border border-slate-200 bg-white p-5 shadow-2xl",
+          "grid max-h-[calc(100dvh-40px)] w-full grid-rows-[auto_minmax(0,1fr)] gap-4 overflow-hidden rounded-lg border border-slate-200 bg-white p-5 shadow-2xl",
           wide ? "max-w-4xl" : "max-w-xl",
         )}
         role="dialog"
@@ -123,7 +123,7 @@ export function Modal({ title, eyebrow, onClose, children, wide = false }: { tit
             关闭
           </Button>
         </div>
-        {children}
+        <div className="grid min-h-0 content-start gap-4 overflow-y-auto pr-1 overscroll-contain">{children}</div>
       </section>
     </div>
   );

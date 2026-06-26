@@ -1,10 +1,11 @@
 // 文件功能描述：渲染项目 ZIP、文件夹和 HTML 三种发布方式。
 import { useRef, useState } from "react";
 import { FileArchive, FileCode2, FolderOpen, Upload } from "lucide-react";
-import type { PublishKind } from "../../appTypes";
+import type { PublishKind, UploadProgress } from "../../appTypes";
 import type { ConsoleController } from "../../hooks/useConsoleState";
 import type { Project } from "../../types";
 import { Button, Panel, PanelHead } from "../../ui";
+import { formatSize } from "../../utils/format";
 import { emptyUploadSummaries, readUploadSelection, uploadSummary } from "../../utils/uploads";
 
 // PublishTab 展示三种上传卡片，并从 input ref 读取 FileList。
@@ -28,16 +29,16 @@ export function PublishTab({ app, project }: { app: ConsoleController; project: 
     <Panel>
       <PanelHead title="发布项目" meta={`当前版本 ${project.currentVersionId || "-"}`} />
       <div className="grid gap-3 lg:grid-cols-3">
-        <UploadCard kind="zip" icon={FileArchive} title="ZIP 构建产物" description="适合已经压缩好的 Vite、Vue、React、Webpack 构建目录。" summary={summaries.zip} refs={refs.current} pending={app.isPending(`publish:${project.id}:zip`)} onChange={handleFileChange} onPublish={publish} />
-        <UploadCard kind="folder" icon={FolderOpen} title="文件夹构建产物" description="直接选择 dist 文件夹，系统会保留内部目录结构并创建完整版本。" summary={summaries.folder} refs={refs.current} pending={app.isPending(`publish:${project.id}:folder`)} onChange={handleFileChange} onPublish={publish} />
-        <UploadCard kind="html" icon={FileCode2} title="单 HTML 文件" description="上传后会保存为 index.html，适合没有独立静态资源的页面。" summary={summaries.html} refs={refs.current} pending={app.isPending(`publish:${project.id}:html`)} onChange={handleFileChange} onPublish={publish} />
+        <UploadCard kind="zip" icon={FileArchive} title="ZIP 构建产物" description="适合已经压缩好的 Vite、Vue、React、Webpack 构建目录。" summary={summaries.zip} refs={refs.current} pending={app.isPending(`publish:${project.id}:zip`)} progress={app.state.uploadProgress[`publish:${project.id}:zip`]} onChange={handleFileChange} onPublish={publish} />
+        <UploadCard kind="folder" icon={FolderOpen} title="文件夹构建产物" description="直接选择 dist 文件夹，系统会保留内部目录结构并创建完整版本。" summary={summaries.folder} refs={refs.current} pending={app.isPending(`publish:${project.id}:folder`)} progress={app.state.uploadProgress[`publish:${project.id}:folder`]} onChange={handleFileChange} onPublish={publish} />
+        <UploadCard kind="html" icon={FileCode2} title="单 HTML 文件" description="上传后会保存为 index.html，适合没有独立静态资源的页面。" summary={summaries.html} refs={refs.current} pending={app.isPending(`publish:${project.id}:html`)} progress={app.state.uploadProgress[`publish:${project.id}:html`]} onChange={handleFileChange} onPublish={publish} />
       </div>
     </Panel>
   );
 }
 
 // UploadCard 渲染单个发布方式的文件选择和上传按钮。
-function UploadCard({ kind, icon: Icon, title, description, summary, refs, pending, onChange, onPublish }: { kind: PublishKind; icon: typeof FileArchive; title: string; description: string; summary: string; refs: Record<PublishKind, HTMLInputElement | null>; pending: boolean; onChange: (kind: PublishKind, input: HTMLInputElement) => void; onPublish: (kind: PublishKind) => void }) {
+function UploadCard({ kind, icon: Icon, title, description, summary, refs, pending, progress, onChange, onPublish }: { kind: PublishKind; icon: typeof FileArchive; title: string; description: string; summary: string; refs: Record<PublishKind, HTMLInputElement | null>; pending: boolean; progress?: UploadProgress; onChange: (kind: PublishKind, input: HTMLInputElement) => void; onPublish: (kind: PublishKind) => void }) {
   const hasFile = !!refs[kind]?.files?.length;
   return (
     <div className="grid content-start gap-3 rounded-lg border border-slate-200 bg-white p-4">
@@ -67,9 +68,35 @@ function UploadCard({ kind, icon: Icon, title, description, summary, refs, pendi
         </span>
       </label>
       <div className="min-h-10 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500 break-words">{summary}</div>
+      {pending ? <UploadProgressView progress={progress} /> : null}
       <Button variant={kind === "html" ? "default" : "primary"} icon={Upload} type="button" onClick={() => onPublish(kind)} disabled={!hasFile || pending}>
-        {pending ? "上传中" : kind === "folder" ? "上传所选文件夹" : `上传 ${kind.toUpperCase()}`}
+        {pending ? uploadButtonText(progress) : kind === "folder" ? "上传所选文件夹" : `上传 ${kind.toUpperCase()}`}
       </Button>
     </div>
   );
+}
+
+// UploadProgressView 展示浏览器已经发送到服务端的上传进度。
+function UploadProgressView({ progress }: { progress?: UploadProgress }) {
+  const width = progress?.percent ?? 8;
+  return (
+    <div className="grid gap-1">
+      <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-full rounded-full bg-teal-600 transition-all" style={{ width: `${width}%` }} />
+      </div>
+      <span className="text-xs font-bold text-slate-500">{progressText(progress)}</span>
+    </div>
+  );
+}
+
+// progressText 返回上传进度的中文说明。
+function progressText(progress?: UploadProgress) {
+  if (!progress) return "正在准备上传...";
+  if (progress.total > 0) return `${progress.percent}% · ${formatSize(progress.loaded)} / ${formatSize(progress.total)}`;
+  return `已上传 ${formatSize(progress.loaded)}`;
+}
+
+// uploadButtonText 返回上传按钮在进行中的文案。
+function uploadButtonText(progress?: UploadProgress) {
+  return progress?.percent === null || progress?.percent === undefined ? "上传中" : `上传中 ${progress.percent}%`;
 }

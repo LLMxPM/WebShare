@@ -8,6 +8,12 @@ export type UserModalMode = "create" | "edit" | "reset";
 export type AccountModalFocus = "email" | "password";
 export type PublishKind = "zip" | "folder" | "html";
 
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percent: number | null;
+}
+
 export interface UserModal {
   mode: UserModalMode;
   userId?: number;
@@ -16,5 +22,5 @@ export interface UserModal {
 export interface UploadSelection {
   kind: PublishKind;
   file?: File;
-  files?: FileList;
+  files?: FileList | File[];
 }
