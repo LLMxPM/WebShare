@@ -169,6 +169,20 @@ environment:
 
 如果没有设置 `INIT_ADMIN_PASSWORD`，服务会在空库首次启动时把一次性初始密码写入运行日志。Windows 单 EXE 模式下，也可以通过托盘菜单查看或重置管理员账号。
 
+Docker 部署后如果忘记管理员密码，可以在运行中的容器内执行离线重置命令：
+
+```bash
+docker exec webshare /app/webshare admin reset-password
+```
+
+如果容器当前没有运行，也可以通过 Compose 使用同一个数据卷临时执行：
+
+```bash
+docker compose run --rm webshare admin reset-password
+```
+
+命令会把默认管理员账号重置为 `INIT_ADMIN_USER` 指定的用户名（默认 `admin`），生成新密码并打印到终端，同时更新数据库中的密码哈希和可展示的明文凭据记录。
+
 ## 局域网访问注意事项
 
 - 确保防火墙允许管理端口、分享端口和需要使用的独立端口。

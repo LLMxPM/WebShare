@@ -25,6 +25,10 @@ func main() {
 
 // run 初始化日志、配置和服务，返回进程退出码。
 func run() int {
+	if handled, code := maybeRunAdminCommand(os.Args[1:]); handled {
+		return code
+	}
+
 	cfg := config.Load()
 	logger, err := applog.Setup(applog.Config{
 		File:       cfg.LogFile,

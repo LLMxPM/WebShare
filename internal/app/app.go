@@ -3,7 +3,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -11,20 +10,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
 	"webshare/internal/config"
 	"webshare/internal/model"
-	"webshare/internal/security"
 	"webshare/internal/storage"
 	"webshare/internal/store"
-)
-
-const (
-	adminCredentialUserKey     = "desktop_admin_username"
-	adminCredentialPasswordKey = "desktop_admin_password"
 )
 
 // App 保存应用运行时依赖和项目端口服务状态。
@@ -35,13 +27,6 @@ type App struct {
 	projectServers  map[int64]*http.Server
 	runtimeWarnings map[int64][]string
 	projectMu       sync.Mutex
-}
-
-// AdminCredential 是托盘菜单展示和重置管理员账号时返回的明文凭据。
-type AdminCredential struct {
-	Username         string
-	Password         string
-	PasswordRecorded bool
 }
 
 // New 初始化数据库、文件目录和首次管理员账号。
@@ -110,89 +95,6 @@ func (a *App) Start(ctx context.Context) error {
 		log.Printf("服务异常退出: %v", err)
 		return err
 	}
-}
-
-// ensureInitialAdmin 在空库首次启动时创建管理员；未给密码时生成一次性密码。
-func (a *App) ensureInitialAdmin() error {
-	count, err := a.store.UserCount()
-	if err != nil || count > 0 {
-		return err
-	}
-	password := a.cfg.InitAdminPassword
-	if password == "" {
-		generated, err := security.RandomToken(18)
-		if err != nil {
-			return err
-		}
-		password = generated
-		log.Printf("首次启动管理员: 用户名=%s 密码=%s", a.cfg.InitAdminUser, password)
-	}
-	hash, err := security.HashPassword(password)
-	if err != nil {
-		return err
-	}
-	_, err = a.store.CreateUser(a.cfg.InitAdminUser, "", hash, model.RoleAdmin)
-	if err != nil {
-		return err
-	}
-	return a.saveAdminCredential(a.cfg.InitAdminUser, password)
-}
-
-// CurrentAdminCredential 返回当前记录的管理员账号和密码；旧库可能没有明文密码记录。
-func (a *App) CurrentAdminCredential() (AdminCredential, error) {
-	username, err := a.store.GetSetting(adminCredentialUserKey)
-	if err != nil {
-		return AdminCredential{}, err
-	}
-	password, err := a.store.GetSetting(adminCredentialPasswordKey)
-	if err != nil {
-		return AdminCredential{}, err
-	}
-	if username == "" {
-		username = a.cfg.InitAdminUser
-	}
-	return AdminCredential{Username: username, Password: password, PasswordRecorded: password != ""}, nil
-}
-
-// ResetAdminCredential 重置默认管理员账号并返回新的明文密码。
-func (a *App) ResetAdminCredential() (AdminCredential, error) {
-	username := strings.TrimSpace(a.cfg.InitAdminUser)
-	if username == "" {
-		username = "admin"
-	}
-	password, err := security.RandomPassword(10)
-	if err != nil {
-		return AdminCredential{}, err
-	}
-	hash, err := security.HashPassword(password)
-	if err != nil {
-		return AdminCredential{}, err
-	}
-	user, err := a.store.UserByUsername(username)
-	if errors.Is(err, sql.ErrNoRows) {
-		user, err = a.store.CreateUser(username, "", hash, model.RoleAdmin)
-	} else if err == nil {
-		user, err = a.store.UpdateUser(user.ID, username, user.Email, model.RoleAdmin, false)
-		if err == nil {
-			err = a.store.ResetPassword(user.ID, hash)
-		}
-	}
-	if err != nil {
-		return AdminCredential{}, err
-	}
-	_ = a.store.DeleteSessionsForUser(user.ID)
-	if err := a.saveAdminCredential(username, password); err != nil {
-		return AdminCredential{}, err
-	}
-	return AdminCredential{Username: username, Password: password, PasswordRecorded: true}, nil
-}
-
-// saveAdminCredential 保存托盘菜单可展示的管理员账号和明文密码。
-func (a *App) saveAdminCredential(username, password string) error {
-	if err := a.store.SetSetting(adminCredentialUserKey, username); err != nil {
-		return err
-	}
-	return a.store.SetSetting(adminCredentialPasswordKey, password)
 }
 
 // startExistingProjectServers 为数据库中已分配独立端口的项目恢复监听。

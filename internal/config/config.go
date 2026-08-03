@@ -43,6 +43,11 @@ func Load() Config {
 	return loadWithFlagSet(os.Args[1:], flag.CommandLine)
 }
 
+// LoadArgs 从指定参数和环境变量读取配置，供子命令复用通用配置项。
+func LoadArgs(args []string) Config {
+	return loadWithFlagSet(args, flag.NewFlagSet("webshare", flag.ExitOnError))
+}
+
 // loadWithFlagSet 从指定参数和环境变量读取配置，便于测试隔离全局 flag。
 func loadWithFlagSet(args []string, flags *flag.FlagSet) Config {
 	cfg := Config{
